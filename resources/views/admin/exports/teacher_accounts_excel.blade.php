@@ -29,7 +29,7 @@
                         Belum diatur
                     @endif
                 </td>
-                <td>Lantaburo1</td>
+                <td>Password tidak ditampilkan. Gunakan fitur lupa password atau ubah password lewat admin/profil.</td>
             </tr>
         @endforeach
     </tbody>

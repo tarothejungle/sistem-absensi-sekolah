@@ -19,7 +19,9 @@ class LeaveRequest extends Model
         'status_pengajuan',
         'status_infal',
         'catatan_infal',
+        'catatan_approval',
         'approved_by',
+        'approved_at',
     ];
     protected $casts = ['tanggal_mulai' => 'date', 'tanggal_selesai' => 'date', 'approved_at' => 'datetime'];
 

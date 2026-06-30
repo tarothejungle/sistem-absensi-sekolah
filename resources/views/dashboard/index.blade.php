@@ -183,10 +183,11 @@
         </div>
 
         <div class="row g-4 mb-4">
-            <div class="col-md-3"><div class="metric-card metric-blue"><div class="metric-icon"><i class="bi bi-people-fill"></i></div><div class="metric-label">Total Guru</div><div class="metric-value">{{ $totalGuru ?? 0 }}</div></div></div>
-            <div class="col-md-3"><div class="metric-card metric-green"><div class="metric-icon"><i class="bi bi-check-circle-fill"></i></div><div class="metric-label">Hadir Hari Ini</div><div class="metric-value">{{ $hadirHariIni ?? 0 }}</div></div></div>
-            <div class="col-md-3"><div class="metric-card metric-yellow"><div class="metric-icon"><i class="bi bi-clock-history"></i></div><div class="metric-label">Terlambat</div><div class="metric-value">{{ $terlambatHariIni ?? 0 }}</div></div></div>
-            <div class="col-md-3"><div class="metric-card metric-red"><div class="metric-icon"><i class="bi bi-exclamation-triangle-fill"></i></div><div class="metric-label">Belum Absen</div><div class="metric-value">{{ $belumAbsenHariIni ?? 0 }}</div></div></div>
+            <div class="col-md-6 col-xl"><div class="metric-card metric-blue"><div class="metric-icon"><i class="bi bi-people-fill"></i></div><div class="metric-label">Total Guru</div><div class="metric-value">{{ $totalGuru ?? 0 }}</div></div></div>
+            <div class="col-md-6 col-xl"><div class="metric-card metric-green"><div class="metric-icon"><i class="bi bi-check-circle-fill"></i></div><div class="metric-label">Hadir Lengkap</div><div class="metric-value">{{ $hadirHariIni ?? 0 }}</div></div></div>
+            <div class="col-md-6 col-xl"><div class="metric-card metric-yellow"><div class="metric-icon"><i class="bi bi-clock-history"></i></div><div class="metric-label">Terlambat</div><div class="metric-value">{{ $terlambatHariIni ?? 0 }}</div></div></div>
+            <div class="col-md-6 col-xl"><div class="metric-card metric-cyan"><div class="metric-icon"><i class="bi bi-hourglass-split"></i></div><div class="metric-label">Tidak Lengkap</div><div class="metric-value">{{ $tidakLengkapHariIni ?? 0 }}</div></div></div>
+            <div class="col-md-6 col-xl"><div class="metric-card metric-red"><div class="metric-icon"><i class="bi bi-exclamation-triangle-fill"></i></div><div class="metric-label">Belum Absen</div><div class="metric-value">{{ $belumAbsenHariIni ?? 0 }}</div></div></div>
         </div>
 
         <div class="card">

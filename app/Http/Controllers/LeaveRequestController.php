@@ -17,7 +17,7 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         // $perPage = $this->resolvePerPage($request);
 
-        $query = LeaveRequest::with(['teacher.user', 'infalTeacher.user']);
+        $query = LeaveRequest::with(['teacher.user', 'infalTeacher.user', 'approver']);
 
         if (in_array($user->role, ['guru', 'bendahara'])) {
             $teacher = $user->teacher;
@@ -315,12 +315,33 @@ class LeaveRequestController extends Controller
             return back()->with('error', 'Pengajuan ini sudah diproses.');
         }
 
+        $data = request()->validate([
+            'catatan_approval' => 'nullable|string|max:500',
+        ]);
+
         $leave->update([
             'status_pengajuan' => 'disetujui',
             'status_infal' => $leave->infal_teacher_id ? $leave->status_infal : 'disetujui',
             'approved_by' => auth()->id(),
             'approved_at' => now(),
+            'catatan_approval' => $data['catatan_approval'] ?? null,
         ]);
+
+        if ($leave->teacher && $leave->teacher->user_id) {
+            $message = 'Pengajuan ' . ucfirst(str_replace('_', ' ', $leave->jenis_pengajuan)) . ' Anda disetujui.';
+
+            if (!empty($data['catatan_approval'])) {
+                $message .= ' Catatan: ' . $data['catatan_approval'];
+            }
+
+            AppNotificationService::send(
+                $leave->teacher->user_id,
+                'Pengajuan izin/cuti disetujui',
+                $message,
+                'leave',
+                route('leave.index')
+            );
+        }
 
         if ($leave->infal_teacher_id && $leave->infalTeacher && $leave->infalTeacher->user_id) {
             AppNotificationService::send(
@@ -345,18 +366,29 @@ class LeaveRequestController extends Controller
             return back()->with('error', 'Pengajuan ini sudah diproses.');
         }
 
+        $data = request()->validate([
+            'catatan_approval' => 'nullable|string|max:500',
+        ]);
+
         $leave->update([
             'status_pengajuan' => 'ditolak',
             'status_infal' => 'ditolak',
             'approved_by' => auth()->id(),
             'approved_at' => now(),
+            'catatan_approval' => $data['catatan_approval'] ?? null,
         ]);
 
         if ($leave->teacher && $leave->teacher->user_id) {
+            $message = 'Pengajuan ' . ucfirst(str_replace('_', ' ', $leave->jenis_pengajuan)) . ' Anda ditolak.';
+
+            if (!empty($data['catatan_approval'])) {
+                $message .= ' Catatan: ' . $data['catatan_approval'];
+            }
+
             AppNotificationService::send(
                 $leave->teacher->user_id,
                 'Pengajuan izin/cuti ditolak',
-                'Pengajuan ' . ucfirst(str_replace('_', ' ', $leave->jenis_pengajuan)) . ' Anda ditolak.',
+                $message,
                 'leave',
                 route('leave.index')
             );
@@ -409,15 +441,26 @@ class LeaveRequestController extends Controller
             return back()->with('error', 'Status guru pengganti sudah diproses.');
         }
 
+        $data = request()->validate([
+            'catatan_infal' => 'nullable|string|max:500',
+        ]);
+
         $leave->update([
             'status_infal' => 'ditolak',
+            'catatan_infal' => $data['catatan_infal'] ?? null,
         ]);
 
         if ($leave->teacher && $leave->teacher->user_id) {
+            $message = ($teacher->nama_lengkap ?? 'Guru pengganti') . ' menolak permintaan infal. Silakan ganti guru pengganti.';
+
+            if (!empty($data['catatan_infal'])) {
+                $message .= ' Catatan: ' . $data['catatan_infal'];
+            }
+
             AppNotificationService::send(
                 $leave->teacher->user_id,
                 'Guru pengganti menolak',
-                ($teacher->nama_lengkap ?? 'Guru pengganti') . ' menolak permintaan infal. Silakan ganti guru pengganti.',
+                $message,
                 'infal',
                 route('leave.index')
             );

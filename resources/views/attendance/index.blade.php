@@ -144,6 +144,8 @@
                                                 <span class="badge bg-warning text-dark">Terlambat {{ $attendance->keterlambatan_menit }} menit</span>
                                             @elseif($attendance->status_kehadiran === 'hadir')
                                                 <span class="badge bg-success">Hadir</span>
+                                            @elseif($attendance->status_kehadiran === 'hadir_tidak_lengkap')
+                                                <span class="badge bg-secondary">Hadir Tidak Lengkap</span>
                                             @else
                                                 <span class="badge bg-secondary">{{ ucfirst(str_replace('_', ' ', $attendance->status_kehadiran)) }}</span>
                                             @endif

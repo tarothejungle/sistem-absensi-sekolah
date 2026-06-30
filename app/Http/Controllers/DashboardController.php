@@ -61,6 +61,7 @@ class DashboardController extends Controller
 
         $hadirHariIni = $rekapHariIni->where('status_kehadiran', 'hadir')->unique('teacher_id')->count();
         $terlambatHariIni = $rekapHariIni->where('status_kehadiran', 'terlambat')->unique('teacher_id')->count();
+        $tidakLengkapHariIni = $rekapHariIni->where('status_kehadiran', 'hadir_tidak_lengkap')->unique('teacher_id')->count();
 
         // Belum absen berarti guru yang jadwalnya aktif hari ini belum punya status apa pun pada rekap hari ini.
         $guruYangSudahAdaStatus = $rekapHariIni->pluck('teacher_id')->unique()->count();
@@ -76,6 +77,7 @@ class DashboardController extends Controller
             'totalGuru' => $totalGuru,
             'hadirHariIni' => $hadirHariIni,
             'terlambatHariIni' => $terlambatHariIni,
+            'tidakLengkapHariIni' => $tidakLengkapHariIni,
             'belumAbsenHariIni' => $belumAbsenHariIni,
             'rekapHariIni' => $rekapHariIni,
             'loginActivities' => $loginActivities,

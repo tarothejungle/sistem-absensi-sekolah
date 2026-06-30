@@ -21,7 +21,8 @@ class DailyAttendanceStatusService
         $teachers = $this->expectedTeachersForDate($targetDate);
 
         foreach ($teachers as $teacher) {
-            $existingRows = Attendance::where('teacher_id', $teacher->id)
+            $existingRows = Attendance::with(['attendanceSession', 'schedule'])
+                ->where('teacher_id', $teacher->id)
                 ->whereDate('tanggal', $todayString)
                 ->get();
 
@@ -29,8 +30,8 @@ class DailyAttendanceStatusService
                 return !is_null($attendance->check_in_time);
             });
 
-            // Kalau guru sudah benar-benar check-in, status real absensi tidak boleh ditimpa.
             if ($hasRealAttendance) {
+                $this->markIncompleteAttendances($existingRows, $teacher, $targetDate, $hari);
                 continue;
             }
 
@@ -74,7 +75,7 @@ class DailyAttendanceStatusService
             })
             ->join('teachers', 'attendances.teacher_id', '=', 'teachers.id')
             ->select('attendances.*')
-            ->orderByRaw("CASE status_kehadiran WHEN 'hadir' THEN 1 WHEN 'terlambat' THEN 2 WHEN 'sakit' THEN 3 WHEN 'izin' THEN 4 WHEN 'cuti' THEN 5 WHEN 'tugas_luar' THEN 6 WHEN 'alfa' THEN 7 ELSE 8 END")
+            ->orderByRaw("CASE status_kehadiran WHEN 'hadir' THEN 1 WHEN 'terlambat' THEN 2 WHEN 'hadir_tidak_lengkap' THEN 3 WHEN 'sakit' THEN 4 WHEN 'izin' THEN 5 WHEN 'cuti' THEN 6 WHEN 'tugas_luar' THEN 7 WHEN 'alfa' THEN 8 ELSE 9 END")
             ->orderBy('teachers.nama_lengkap')
             ->get();
     }
@@ -178,6 +179,69 @@ class DailyAttendanceStatusService
         }
 
         return $now->gt($cutoff);
+    }
+
+    private function markIncompleteAttendances(Collection $attendances, Teacher $teacher, Carbon $targetDate, string $hari): void
+    {
+        foreach ($attendances as $attendance) {
+            if (!$attendance->check_in_time || $attendance->check_out_time) {
+                continue;
+            }
+
+            if (!in_array($attendance->status_kehadiran, ['hadir', 'terlambat'], true)) {
+                continue;
+            }
+
+            $session = $attendance->attendanceSession ?: $this->firstActiveSession($teacher);
+            $schedule = $attendance->schedule ?: $this->todaySchedule($teacher, $hari);
+
+            if (!$this->shouldMarkIncomplete($targetDate, $session, $schedule)) {
+                continue;
+            }
+
+            $attendance->update([
+                'status_kehadiran' => 'hadir_tidak_lengkap',
+            ]);
+        }
+    }
+
+    private function shouldMarkIncomplete(
+        Carbon $targetDate,
+        ?AttendanceSession $session,
+        ?WorkSchedule $schedule
+    ): bool {
+        $today = now('Asia/Jakarta')->startOfDay();
+
+        if ($targetDate->gt($today)) {
+            return false;
+        }
+
+        $cutoff = $this->checkoutCutoffAt($targetDate, $session, $schedule);
+
+        return now('Asia/Jakarta')->gt($cutoff);
+    }
+
+    private function checkoutCutoffAt(
+        Carbon $targetDate,
+        ?AttendanceSession $session,
+        ?WorkSchedule $schedule
+    ): Carbon {
+        if ($session) {
+            $start = Carbon::parse($targetDate->toDateString() . ' ' . $session->batas_check_out_mulai, 'Asia/Jakarta');
+            $end = Carbon::parse($targetDate->toDateString() . ' ' . $session->batas_check_out_selesai, 'Asia/Jakarta');
+
+            if ($end->lt($start)) {
+                $end->addDay();
+            }
+
+            return $end;
+        }
+
+        if ($schedule) {
+            return Carbon::parse($targetDate->toDateString() . ' ' . $schedule->jam_pulang, 'Asia/Jakarta');
+        }
+
+        return Carbon::parse($targetDate->toDateString() . ' 23:59:59', 'Asia/Jakarta');
     }
 
     private function activeSessions(Teacher $teacher): Collection

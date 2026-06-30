@@ -14,6 +14,8 @@ use Illuminate\Http\Request;
 
 class AttendanceController extends Controller
 {
+    private const MAX_GPS_ACCURACY_METERS = 100;
+
     public function index()
     {
         if (!in_array(auth()->user()->role, ['guru', 'bendahara', 'kepala_sekolah'])) {
@@ -205,6 +207,11 @@ class AttendanceController extends Controller
         );
 
         $gpsAccuracy = (float) $request->input('accuracy', 0);
+
+        if ($this->isGpsAccuracyTooLow($gpsAccuracy)) {
+            return back()->with('error', $this->gpsAccuracyErrorMessage($gpsAccuracy));
+        }
+
         $allowedRadius = (float) $location->radius_meter + min($gpsAccuracy, 100);
 
         if ($distance > $allowedRadius) {
@@ -344,6 +351,11 @@ class AttendanceController extends Controller
         );
 
         $gpsAccuracy = (float) $request->input('accuracy', 0);
+
+        if ($this->isGpsAccuracyTooLow($gpsAccuracy)) {
+            return back()->with('error', $this->gpsAccuracyErrorMessage($gpsAccuracy));
+        }
+
         $allowedRadius = (float) $location->radius_meter + min($gpsAccuracy, 100);
 
         if ($distance > $allowedRadius) {
@@ -405,5 +417,18 @@ class AttendanceController extends Controller
         $perPage = (int) $request->input('per_page', $default);
 
         return in_array($perPage, $allowed, true) ? $perPage : $default;
+    }
+
+    private function isGpsAccuracyTooLow(float $gpsAccuracy): bool
+    {
+        return $gpsAccuracy > self::MAX_GPS_ACCURACY_METERS;
+    }
+
+    private function gpsAccuracyErrorMessage(float $gpsAccuracy): string
+    {
+        return 'Absensi ditolak. Akurasi GPS terlalu rendah. ' .
+            'Akurasi terdeteksi: ' . round($gpsAccuracy) . ' meter. ' .
+            'Maksimal akurasi yang diizinkan: ' . self::MAX_GPS_ACCURACY_METERS . ' meter. ' .
+            'Aktifkan mode akurasi tinggi GPS, mendekat ke area terbuka, lalu coba lagi.';
     }
 }

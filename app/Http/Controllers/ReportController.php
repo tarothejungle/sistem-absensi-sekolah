@@ -42,6 +42,7 @@ class ReportController extends Controller
         $chartLabels = [
             'Hadir',
             'Terlambat',
+            'Hadir Tidak Lengkap',
             'Izin',
             'Sakit',
             'Cuti',
@@ -51,6 +52,7 @@ class ReportController extends Controller
         $chartData = [
             $attendances->where('status_kehadiran', 'hadir')->count(),
             $attendances->where('status_kehadiran', 'terlambat')->count(),
+            $attendances->where('status_kehadiran', 'hadir_tidak_lengkap')->count(),
             $attendances->where('status_kehadiran', 'izin')->count(),
             $attendances->where('status_kehadiran', 'sakit')->count(),
             $attendances->where('status_kehadiran', 'cuti')->count(),

@@ -65,8 +65,8 @@
                 <th>Tanggal</th>
                 <th>Guru Utama</th>
                 <th>Guru Infal/Pengganti</th>
-                <!-- <th>Jenis</th>
-                <th>Alasan</th> -->
+                <th>Jenis</th>
+                <th>Alasan</th>
                 <th>Status Izin</th>
                 <th>Status Infal</th>
             </tr>
@@ -83,8 +83,8 @@
                     </td>
                     <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
                     <td>{{ $item->infalTeacher->nama_lengkap ?? '-' }}</td>
-                    <!-- <td>{{ ucfirst($item->jenis_pengajuan) }}</td>
-                    <td>{{ $item->alasan }}</td> -->
+                    <td>{{ ucfirst($item->jenis_pengajuan) }}</td>
+                    <td>{{ $item->alasan }}</td>
                     <td>Disetujui</td>
                     <td>Disetujui</td>
                 </tr>

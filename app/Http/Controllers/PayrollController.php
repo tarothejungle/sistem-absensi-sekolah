@@ -24,10 +24,9 @@ class PayrollController extends Controller
 
     private array $payrollRoles = ['bendahara', 'super_admin'];
 
-    private function getPotonganByGaji($gajiPokok): int
-    {
-        return (float) $gajiPokok >= 1000000 ? 30000 : 20000;
-    }
+    private array $payrollTeacherRoles = ['guru', 'bendahara', 'kepala_sekolah'];
+
+    private array $deductedLeaveTypes = ['sakit', 'izin', 'cuti'];
 
     public function index(Request $request)
     {
@@ -61,10 +60,11 @@ class PayrollController extends Controller
     {
         $this->authorizePayrollAccess();
         // $perPage = $this->resolvePerPage($request);
+        $payrollTeacherRoles = $this->payrollTeacherRoles;
 
         $teachers = Teacher::with(['user', 'salary'])
-            ->whereHas('user', function ($query) {
-                $query->whereIn('role', ['guru', 'bendahara', 'kepala_sekolah']);
+            ->whereHas('user', function ($query) use ($payrollTeacherRoles) {
+                $query->whereIn('role', $payrollTeacherRoles);
             })
             ->orderBy('nama_lengkap')
             ->paginate(7)
@@ -106,6 +106,8 @@ class PayrollController extends Controller
 
     public function generate(Request $request)
     {
+        $this->authorizePayrollAccess();
+
         $request->validate([
             'tahun' => 'required|integer|min:2020|max:2100',
             'bulan' => 'required|integer|min:1|max:12',
@@ -116,8 +118,10 @@ class PayrollController extends Controller
 
         $tanggalMulai = Carbon::create($tahun, $bulan, 1)->startOfMonth();
         $tanggalSelesai = Carbon::create($tahun, $bulan, 1)->endOfMonth();
+        $payrollTeacherRoles = $this->payrollTeacherRoles;
+        $deductedLeaveTypes = $this->deductedLeaveTypes;
 
-        DB::transaction(function () use ($tahun, $bulan, $tanggalMulai, $tanggalSelesai) {
+        DB::transaction(function () use ($tahun, $bulan, $tanggalMulai, $tanggalSelesai, $payrollTeacherRoles, $deductedLeaveTypes) {
             $period = PayrollPeriod::updateOrCreate(
                 [
                     'tahun' => $tahun,
@@ -144,8 +148,9 @@ class PayrollController extends Controller
                 'salary',
                 'schedules',
             ])
-                ->whereHas('user', function ($query) {
-                    $query->where('status', 'aktif');
+                ->whereHas('user', function ($query) use ($payrollTeacherRoles) {
+                    $query->where('status', 'aktif')
+                        ->whereIn('role', $payrollTeacherRoles);
                 })
                 ->orderBy('nama_lengkap')
                 ->get();
@@ -158,16 +163,7 @@ class PayrollController extends Controller
             |------------------------------------------------------------
             */
             foreach ($teachers as $teacher) {
-                $salary = TeacherSalary::firstOrCreate(
-                    [
-                        'teacher_id' => $teacher->id,
-                    ],
-                    [
-                        'gaji_pokok' => 0,
-                        'potongan_per_absen' => 20000,
-                        'keterangan' => 'Default otomatis.',
-                    ]
-                );
+                $salary = $teacher->salary ?: $this->ensureTeacherSalary($teacher);
 
                 $payrollItem = PayrollItem::create([
                     'payroll_period_id' => $period->id,
@@ -201,6 +197,7 @@ class PayrollController extends Controller
                 ->where('status_pengajuan', 'disetujui')
                 ->where('status_infal', 'disetujui')
                 ->whereNotNull('infal_teacher_id')
+                ->whereIn('jenis_pengajuan', $deductedLeaveTypes)
                 ->whereDate('tanggal_mulai', '<=', $tanggalSelesai->toDateString())
                 ->whereDate('tanggal_selesai', '>=', $tanggalMulai->toDateString())
                 ->get();
@@ -223,18 +220,7 @@ class PayrollController extends Controller
 
                 $salaryGuruUtama = $guruUtama->salary;
 
-                if (!$salaryGuruUtama) {
-                    $salaryGuruUtama = TeacherSalary::firstOrCreate(
-                        [
-                            'teacher_id' => $guruUtama->id,
-                        ],
-                        [
-                            'gaji_pokok' => 0,
-                            'potongan_per_absen' => 20000,
-                            'keterangan' => 'Default otomatis.',
-                        ]
-                    );
-                }
+                $salaryGuruUtama = $salaryGuruUtama ?: $this->ensureTeacherSalary($guruUtama);
 
                 /*
                 | Potongan mengikuti nominal guru yang tidak hadir,
@@ -394,9 +380,13 @@ class PayrollController extends Controller
         });
         $period->items()->delete();
 
+        $payrollTeacherRoles = $this->payrollTeacherRoles;
+        $deductedLeaveTypes = $this->deductedLeaveTypes;
+
         $teachers = Teacher::with(['user', 'salary', 'schedules'])
-            ->whereHas('user', function ($query) {
-                $query->whereIn('role', ['guru', 'bendahara', 'kepala_sekolah']);
+            ->whereHas('user', function ($query) use ($payrollTeacherRoles) {
+                $query->where('status', 'aktif')
+                    ->whereIn('role', $payrollTeacherRoles);
             })
             ->orderBy('nama_lengkap')
             ->get();
@@ -422,7 +412,7 @@ class PayrollController extends Controller
             ->where('status_pengajuan', 'disetujui')
             ->where('status_infal', 'disetujui')
             ->whereNotNull('infal_teacher_id')
-            ->whereIn('jenis_pengajuan', ['sakit', 'izin', 'cuti'])
+            ->whereIn('jenis_pengajuan', $deductedLeaveTypes)
             ->whereDate('tanggal_mulai', '<=', $end->toDateString())
             ->whereDate('tanggal_selesai', '>=', $start->toDateString())
             ->orderBy('tanggal_mulai')
@@ -438,10 +428,12 @@ class PayrollController extends Controller
             }
 
             $teacherSalary = $leave->teacher->salary ?: $this->ensureTeacherSalary($leave->teacher);
-            $potonganPerHari = (float) $teacherSalary->potongan_per_absen;
+            $potonganPerHari = $this->getPotonganPerAbsen((float) $teacherSalary->gaji_pokok);
 
-            if ($potonganPerHari <= 0) {
-                continue;
+            if ((float) $teacherSalary->potongan_per_absen !== $potonganPerHari) {
+                $teacherSalary->update([
+                    'potongan_per_absen' => $potonganPerHari,
+                ]);
             }
 
             $dates = $this->payrollDatesForLeave($leave, $start, $end);
@@ -532,29 +524,10 @@ class PayrollController extends Controller
             ['teacher_id' => $teacher->id],
             [
                 'gaji_pokok' => 0,
-                'potongan_per_absen' => $this->defaultDeductionByPosition($teacher->jabatan),
-                'keterangan' => 'Default otomatis. Silakan sesuaikan di menu pengaturan gaji.',
+                'potongan_per_absen' => $this->getPotonganPerAbsen(0),
+                'keterangan' => 'Otomatis berdasarkan gaji pokok.',
             ]
         );
-    }
-
-    private function defaultDeductionByPosition(?string $position): float
-    {
-        $position = strtolower((string) $position);
-
-        if (str_contains($position, 'wali') || str_contains($position, 'kelas')) {
-            return 50000;
-        }
-
-        if (str_contains($position, 'pondok')) {
-            return 15000;
-        }
-
-        if (str_contains($position, 'bidang')) {
-            return 10000;
-        }
-
-        return 0;
     }
 
     private function authorizePayrollAccess(): void
@@ -581,7 +554,7 @@ class PayrollController extends Controller
         foreach ($request->salaries as $teacherId => $data) {
             $gajiPokok = (float) ($data['gaji_pokok'] ?? 0);
 
-            $potongan = $gajiPokok >= 1000000 ? 30000 : 20000;
+            $potongan = $this->getPotonganPerAbsen($gajiPokok);
 
             TeacherSalary::updateOrCreate(
                 [

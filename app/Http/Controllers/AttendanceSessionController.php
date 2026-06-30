@@ -23,19 +23,9 @@ class AttendanceSessionController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'nama_sesi' => 'required|string|max:100',
-            'jam_masuk' => 'required',
-            'jam_pulang' => 'required',
-            'toleransi_terlambat' => 'required|integer|min:0',
-            'batas_check_in_mulai' => 'required',
-            'batas_check_in_selesai' => 'required',
-            'batas_check_out_mulai' => 'required',
-            'batas_check_out_selesai' => 'required',
-            'status' => 'required|in:aktif,nonaktif',
-        ]);
+        $data = $request->validate($this->rules());
 
-        AttendanceSession::create($request->all());
+        AttendanceSession::create($data);
 
         return redirect()
             ->route('admin.attendance-sessions.index')
@@ -49,19 +39,9 @@ class AttendanceSessionController extends Controller
 
     public function update(Request $request, AttendanceSession $session)
     {
-        $request->validate([
-            'nama_sesi' => 'required|string|max:100',
-            'jam_masuk' => 'required',
-            'jam_pulang' => 'required',
-            'toleransi_terlambat' => 'required|integer|min:0',
-            'batas_check_in_mulai' => 'required',
-            'batas_check_in_selesai' => 'required',
-            'batas_check_out_mulai' => 'required',
-            'batas_check_out_selesai' => 'required',
-            'status' => 'required|in:aktif,nonaktif',
-        ]);
+        $data = $request->validate($this->rules());
 
-        $session->update($request->all());
+        $session->update($data);
 
         return redirect()
             ->route('admin.attendance-sessions.index')
@@ -77,5 +57,20 @@ class AttendanceSessionController extends Controller
         $session->delete();
 
         return back()->with('success', 'Sesi absensi berhasil dihapus.');
+    }
+
+    private function rules(): array
+    {
+        return [
+            'nama_sesi' => 'required|string|max:100',
+            'jam_masuk' => 'required|date_format:H:i',
+            'jam_pulang' => 'required|date_format:H:i',
+            'toleransi_terlambat' => 'required|integer|min:0',
+            'batas_check_in_mulai' => 'required|date_format:H:i',
+            'batas_check_in_selesai' => 'required|date_format:H:i',
+            'batas_check_out_mulai' => 'required|date_format:H:i',
+            'batas_check_out_selesai' => 'required|date_format:H:i',
+            'status' => 'required|in:aktif,nonaktif',
+        ];
     }
 }

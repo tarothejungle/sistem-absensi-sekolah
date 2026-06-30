@@ -297,6 +297,7 @@ body::before{
 .metric-blue{background:linear-gradient(135deg,#1262f1,#1f74ff);}
 .metric-green{background:linear-gradient(135deg,#118452,#18a66b);}
 .metric-yellow{background:linear-gradient(135deg,#ffb719,#ffd15c);color:#111827;}
+.metric-cyan{background:linear-gradient(135deg,#0e7490,#06b6d4);}
 .metric-red{background:linear-gradient(135deg,#da3049,#f0445f);}
 .profile-modern{
     text-align:center;

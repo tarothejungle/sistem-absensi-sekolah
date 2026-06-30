@@ -12,6 +12,7 @@ class InfalReportExport implements FromCollection, WithHeadings, WithMapping, Sh
 {
     protected $tanggalMulai;
     protected $tanggalSelesai;
+    private int $rowNumber = 0;
 
     public function __construct($tanggalMulai = null, $tanggalSelesai = null)
     {
@@ -23,7 +24,8 @@ class InfalReportExport implements FromCollection, WithHeadings, WithMapping, Sh
     {
         $query = LeaveRequest::with(['teacher', 'infalTeacher'])
             ->where('status_pengajuan', 'disetujui')
-            ->where('status_infal', 'disetujui');
+            ->where('status_infal', 'disetujui')
+            ->whereNotNull('infal_teacher_id');
 
         if ($this->tanggalMulai) {
             $query->whereDate('tanggal_mulai', '>=', $this->tanggalMulai);
@@ -43,6 +45,8 @@ class InfalReportExport implements FromCollection, WithHeadings, WithMapping, Sh
             'Tanggal',
             'Guru Utama',
             'Guru Infal/Pengganti',
+            'Jenis',
+            'Alasan',
             'Status Izin',
             'Status Infal',
         ];
@@ -51,6 +55,7 @@ class InfalReportExport implements FromCollection, WithHeadings, WithMapping, Sh
     public function map($item): array
     {
         return [
+            ++$this->rowNumber,
             $item->tanggal_mulai->format('d/m/Y') . ' - ' . $item->tanggal_selesai->format('d/m/Y'),
             $item->teacher->nama_lengkap ?? '-',
             $item->infalTeacher->nama_lengkap ?? '-',

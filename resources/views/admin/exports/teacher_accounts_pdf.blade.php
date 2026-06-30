@@ -63,7 +63,7 @@
                 <!-- <th width="13%">Jabatan</th>
                 <th width="15%">Mapel</th> -->
                 <th width="16%">Sesi</th>
-                <th width="15%">Password</th>
+                <th width="15%">Keterangan Password</th>
             </tr>
         </thead>
         <tbody>
@@ -89,7 +89,7 @@
                         @endif
                     </td>
                     <td>
-                        Lantaburo1
+                        Tidak ditampilkan
                     </td>
                 </tr>
             @endforeach

@@ -186,6 +186,22 @@
                             @else
                                 <span class="badge bg-secondary">{{ $leave->status_pengajuan }}</span>
                             @endif
+
+                            @if($leave->approved_at || $leave->approver || $leave->catatan_approval)
+                                <div class="small text-muted mt-2">
+                                    @if($leave->approver)
+                                        Oleh: {{ $leave->approver->name ?? $leave->approver->nip }}
+                                    @endif
+
+                                    @if($leave->approved_at)
+                                        <br>{{ $leave->approved_at->format('d/m/Y H:i') }}
+                                    @endif
+
+                                    @if($leave->catatan_approval)
+                                        <br><span class="fw-semibold">Catatan:</span> {{ $leave->catatan_approval }}
+                                    @endif
+                                </div>
+                            @endif
                         </td>
 
                         {{-- Status Infal --}}
@@ -200,6 +216,12 @@
                                 <span class="badge bg-danger">Ditolak</span>
                             @else
                                 <span class="badge bg-secondary">-</span>
+                            @endif
+
+                            @if($leave->catatan_infal)
+                                <div class="small text-muted mt-2">
+                                    <span class="fw-semibold">Catatan:</span> {{ $leave->catatan_infal }}
+                                </div>
                             @endif
                         </td>
 
@@ -261,6 +283,14 @@
                                         @csrf
                                         @method('PATCH')
 
+                                        <textarea
+                                            name="catatan_infal"
+                                            class="form-control form-control-sm mb-1"
+                                            rows="2"
+                                            maxlength="500"
+                                            placeholder="Catatan penolakan (opsional)"
+                                        ></textarea>
+
                                         <button type="submit" class="btn btn-danger btn-sm">
                                             Tolak
                                         </button>
@@ -273,19 +303,43 @@
 
                             {{-- Super admin / kepala sekolah --}}
                             @elseif($isApprover && $leave->status_pengajuan === 'pending')
-                                <div class="d-flex gap-1 flex-wrap">
-                                    <form action="{{ route('leave.approve', $leave->id) }}" method="POST" style="display:inline;">
+                                <div class="d-flex flex-column gap-2">
+                                    <form action="{{ route('leave.approve', $leave->id) }}" method="POST">
                                         @csrf
-                                        <button type="submit" class="btn btn-success btn-sm"
-                                            onclick="return confirm('Yakin ingin menyetujui izin ini?')">
+
+                                        <textarea
+                                            name="catatan_approval"
+                                            class="form-control form-control-sm mb-1"
+                                            rows="2"
+                                            maxlength="500"
+                                            placeholder="Catatan persetujuan (opsional)"
+                                        ></textarea>
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-success btn-sm"
+                                            onclick="return confirm('Yakin ingin menyetujui izin ini?')"
+                                        >
                                             Setujui
                                         </button>
                                     </form>
 
-                                    <form action="{{ route('leave.reject', $leave->id) }}" method="POST" style="display:inline;">
+                                    <form action="{{ route('leave.reject', $leave->id) }}" method="POST">
                                         @csrf
-                                        <button type="submit" class="btn btn-danger btn-sm"
-                                            onclick="return confirm('Yakin ingin menolak izin ini?')">
+
+                                        <textarea
+                                            name="catatan_approval"
+                                            class="form-control form-control-sm mb-1"
+                                            rows="2"
+                                            maxlength="500"
+                                            placeholder="Catatan penolakan (opsional)"
+                                        ></textarea>
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-danger btn-sm"
+                                            onclick="return confirm('Yakin ingin menolak izin ini?')"
+                                        >
                                             Tolak
                                         </button>
                                     </form>

@@ -110,6 +110,7 @@
                             <option value="">Semua</option>
                             <option value="hadir" {{ request('status') === 'hadir' ? 'selected' : '' }}>Hadir</option>
                             <option value="terlambat" {{ request('status') === 'terlambat' ? 'selected' : '' }}>Terlambat</option>
+                            <option value="hadir_tidak_lengkap" {{ request('status') === 'hadir_tidak_lengkap' ? 'selected' : '' }}>Hadir Tidak Lengkap</option>
                             <option value="izin" {{ request('status') === 'izin' ? 'selected' : '' }}>Izin</option>
                             <option value="sakit" {{ request('status') === 'sakit' ? 'selected' : '' }}>Sakit</option>
                             <option value="cuti" {{ request('status') === 'cuti' ? 'selected' : '' }}>Cuti</option>
@@ -182,6 +183,8 @@
                                     <span class="badge bg-success">Hadir</span>
                                 @elseif($attendance->status_kehadiran === 'terlambat')
                                     <span class="badge bg-warning text-dark">Terlambat</span>
+                                @elseif($attendance->status_kehadiran === 'hadir_tidak_lengkap')
+                                    <span class="badge bg-secondary">Hadir Tidak Lengkap</span>
                                 @elseif($attendance->status_kehadiran === 'izin')
                                     <span class="badge bg-info text-dark">Izin</span>
                                 @elseif($attendance->status_kehadiran === 'sakit')

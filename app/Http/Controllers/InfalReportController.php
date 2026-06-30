@@ -10,29 +10,15 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class InfalReportController extends Controller
 {
+    private array $reportRoles = ['bendahara', 'super_admin', 'kepala_sekolah'];
+
     public function index(Request $request)
     {
-        $user = auth()->user();
-
-        if (!in_array($user->role, ['bendahara', 'super_admin', 'kepala_sekolah'])) {
-            abort(403);
-        }
+        $this->authorizeReportAccess();
 
         $perPage = $this->resolvePerPage($request);
 
-        $query = LeaveRequest::with(['teacher', 'infalTeacher'])
-            ->where('status_pengajuan', 'disetujui')
-            ->where('status_infal', 'disetujui');
-
-        if ($request->filled('tanggal_mulai')) {
-            $query->whereDate('tanggal_mulai', '>=', $request->tanggal_mulai);
-        }
-
-        if ($request->filled('tanggal_selesai')) {
-            $query->whereDate('tanggal_selesai', '<=', $request->tanggal_selesai);
-        }
-
-        $items = $query
+        $items = $this->filteredInfalQuery($request)
             ->orderBy('tanggal_mulai', 'asc')
             ->paginate($perPage)
             ->withQueryString();
@@ -42,27 +28,11 @@ class InfalReportController extends Controller
 
     public function pdf(Request $request)
     {
-        $user = auth()->user();
+        $this->authorizeReportAccess();
 
-        if (!in_array($user->role, ['bendahara', 'super_admin', 'kepala_sekolah'])) {
-            abort(403, 'Anda tidak memiliki akses ke laporan ini.');
-        }
-
-        $perPage = $this->resolvePerPage($request);
-
-        $query = LeaveRequest::with(['teacher', 'infalTeacher'])
-            ->where('status_pengajuan', 'disetujui')
-            ->where('status_infal', 'disetujui');
-
-        if ($request->filled('tanggal_mulai')) {
-            $query->whereDate('tanggal_mulai', '>=', $request->tanggal_mulai);
-        }
-
-        if ($request->filled('tanggal_selesai')) {
-            $query->whereDate('tanggal_selesai', '<=', $request->tanggal_selesai);
-        }
-
-        $items = $query->orderBy('tanggal_mulai', 'asc')->get();
+        $items = $this->filteredInfalQuery($request)
+            ->orderBy('tanggal_mulai', 'asc')
+            ->get();
 
         $pdf = Pdf::loadView('infal_report.pdf', [
             'items' => $items,
@@ -75,16 +45,37 @@ class InfalReportController extends Controller
 
     public function excel(Request $request)
     {
-        $user = auth()->user();
-    
-        if (!in_array($user->role, ['bendahara', 'super_admin', 'kepala_sekolah'])) {
-            abort(403, 'Anda tidak memiliki akses ke laporan ini.');
-        }
-    
+        $this->authorizeReportAccess();
+
         return Excel::download(
             new InfalReportExport($request->tanggal_mulai, $request->tanggal_selesai),
             'rekap-guru-infal.xlsx'
         );
+    }
+
+    private function filteredInfalQuery(Request $request)
+    {
+        $query = LeaveRequest::with(['teacher', 'infalTeacher'])
+            ->where('status_pengajuan', 'disetujui')
+            ->where('status_infal', 'disetujui')
+            ->whereNotNull('infal_teacher_id');
+
+        if ($request->filled('tanggal_mulai')) {
+            $query->whereDate('tanggal_mulai', '>=', $request->tanggal_mulai);
+        }
+
+        if ($request->filled('tanggal_selesai')) {
+            $query->whereDate('tanggal_selesai', '<=', $request->tanggal_selesai);
+        }
+
+        return $query;
+    }
+
+    private function authorizeReportAccess(): void
+    {
+        if (!auth()->check() || !in_array(auth()->user()->role, $this->reportRoles, true)) {
+            abort(403, 'Anda tidak memiliki akses ke laporan ini.');
+        }
     }
 
 
