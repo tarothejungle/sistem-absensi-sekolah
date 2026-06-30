@@ -105,7 +105,7 @@ class LeaveRequestController extends Controller
     
         $teacher = $user->teacher;
     
-        $roleBebasAkses = in_array($user->role, ['admin', 'super_admin', 'kepala_sekolah']);
+        $roleBebasAkses = in_array($user->role, ['super_admin', 'kepala_sekolah']);
     
         $pengajuanMilikUser = $teacher && (int) $leave->teacher_id === (int) $teacher->id;
     
@@ -159,7 +159,7 @@ class LeaveRequestController extends Controller
             'lampiran.max' => 'Ukuran lampiran maksimal 2MB.',
         ]);
 
-        if ($request->filled('infal_teacher_id') && (int) $request->infal_teacher_id === (int) $teacher->id) {
+        if ($request->filled('infal_teacher_id') && (int) $request->infal_teacher_id === (int) $leave->teacher_id) {
             return back()
                 ->withInput()
                 ->with('error', 'Guru pengganti tidak boleh sama dengan guru yang mengajukan.');
@@ -175,7 +175,6 @@ class LeaveRequestController extends Controller
             'tanggal_mulai' => $request->tanggal_mulai,
             'tanggal_selesai' => $request->tanggal_selesai,
             'alasan' => $request->alasan,
-            'lampiran' => $lampiranPath ?? $leave->lampiran,
             'status_infal' => $infalTeacherId ? 'pending' : 'disetujui',
         ];
     
@@ -185,26 +184,9 @@ class LeaveRequestController extends Controller
         }
     
         if ($request->hasFile('lampiran')) {
-            if ($leave->lampiran) {
-                $oldPath = public_path($leave->lampiran);
-    
-                if (file_exists($oldPath)) {
-                    unlink($oldPath);
-                }
-            }
-    
-            $file = $request->file('lampiran');
-            $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-    
-            $destinationPath = public_path('leave_attachments');
-    
-            if (! file_exists($destinationPath)) {
-                mkdir($destinationPath, 0755, true);
-            }
-    
-            $file->move($destinationPath, $fileName);
-    
-            $data['lampiran'] = 'leave_attachments/' . $fileName;
+            $this->deleteAttachmentFile($leave->lampiran);
+
+            $data['lampiran'] = $this->storeAttachmentFile($request->file('lampiran'));
         }
     
         $leave->update($data);
@@ -233,11 +215,7 @@ class LeaveRequestController extends Controller
         }
 
         if ($leave->lampiran) {
-            $oldFile = public_path($leave->lampiran);
-
-            if (file_exists($oldFile)) {
-                unlink($oldFile);
-            }
+            $this->deleteAttachmentFile($leave->lampiran);
         }
 
         $leave->delete();
@@ -294,25 +272,12 @@ class LeaveRequestController extends Controller
             'tanggal_mulai' => $request->tanggal_mulai,
             'tanggal_selesai' => $request->tanggal_selesai,
             'alasan' => $request->alasan,
-            'lampiran' => $lampiranPath ?? null,
             'status_pengajuan' => 'pending',
             'status_infal' => $infalTeacherId ? 'pending' : 'disetujui',
         ];
 
         if ($request->hasFile('lampiran')) {
-            $file = $request->file('lampiran');
-
-            $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-
-            $destinationPath =  base_path('leave_attachments');
-
-            if (!file_exists($destinationPath)) {
-                mkdir($destinationPath, 0755, true);
-            }
-
-            $file->move($destinationPath, $fileName);
-
-            $data['lampiran'] = 'leave_attachments/' . $fileName;
+            $data['lampiran'] = $this->storeAttachmentFile($request->file('lampiran'));
         }
 
         $leave = LeaveRequest::create($data);
@@ -354,6 +319,7 @@ class LeaveRequestController extends Controller
             'status_pengajuan' => 'disetujui',
             'status_infal' => $leave->infal_teacher_id ? $leave->status_infal : 'disetujui',
             'approved_by' => auth()->id(),
+            'approved_at' => now(),
         ]);
 
         if ($leave->infal_teacher_id && $leave->infalTeacher && $leave->infalTeacher->user_id) {
@@ -383,6 +349,7 @@ class LeaveRequestController extends Controller
             'status_pengajuan' => 'ditolak',
             'status_infal' => 'ditolak',
             'approved_by' => auth()->id(),
+            'approved_at' => now(),
         ]);
 
         if ($leave->teacher && $leave->teacher->user_id) {
@@ -465,7 +432,7 @@ class LeaveRequestController extends Controller
 
         $isAdmin = in_array($user->role, ['super_admin', 'kepala_sekolah']);
 
-        if ($user->role === 'guru') {
+        if (in_array($user->role, ['guru', 'bendahara'], true)) {
             $teacher = $user->teacher;
 
             if (!$teacher || ($leave->teacher_id != $teacher->id && $leave->infal_teacher_id != $teacher->id)) {
@@ -479,13 +446,67 @@ class LeaveRequestController extends Controller
             abort(404, 'Lampiran tidak ditemukan di database.');
         }
 
-        $path = base_path($leave->lampiran);
+        $path = $this->resolveAttachmentPath($leave->lampiran);
 
-        if (!file_exists($path)) {
-            abort(404, 'File lampiran tidak ditemukan di folder: ' . $path);
+        if (!$path) {
+            abort(404, 'File lampiran tidak ditemukan.');
         }
 
         return response()->file($path);
+    }
+
+    private function storeAttachmentFile($file): string
+    {
+        $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+        $destinationPath = public_path('leave_attachments');
+
+        if (!is_dir($destinationPath)) {
+            mkdir($destinationPath, 0755, true);
+        }
+
+        $file->move($destinationPath, $fileName);
+
+        return 'leave_attachments/' . $fileName;
+    }
+
+    private function resolveAttachmentPath(?string $relativePath): ?string
+    {
+        if (!$relativePath) {
+            return null;
+        }
+
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (str_contains($relativePath, '..')) {
+            return null;
+        }
+
+        foreach ([public_path($relativePath), base_path($relativePath)] as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    private function deleteAttachmentFile(?string $relativePath): void
+    {
+        if (!$relativePath) {
+            return;
+        }
+
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (str_contains($relativePath, '..')) {
+            return;
+        }
+
+        foreach ([public_path($relativePath), base_path($relativePath)] as $path) {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
     }
 
 

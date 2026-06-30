@@ -31,6 +31,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('attendance_session_teacher');
+        // Keberadaan tabel ini sekarang menjadi bagian skema inti.
+        // Migrasi ini hanya memastikan database lama ikut tersinkron.
     }
 };

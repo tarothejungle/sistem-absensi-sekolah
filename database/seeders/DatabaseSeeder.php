@@ -16,7 +16,7 @@ class DatabaseSeeder extends Seeder
         $admin = User::create([
             'nip' => 'ADM001',
             'password' => Hash::make('password'),
-            'role' => 'admin',
+            'role' => 'super_admin',
         ]);
 
         $kepalaSekolah = User::create([

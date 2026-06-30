@@ -41,30 +41,12 @@ class ProfileController extends Controller
         ];
 
         if ($request->hasFile('profile_photo')) {
-            // Hapus foto lama jika ada dan tersimpan di public/profile_photo
-            if ($user->profile_photo) {
-                $oldPhotoPath = base_path($user->profile_photo);
+            $this->deletePublicFile($user->profile_photo);
 
-                if (file_exists($oldPhotoPath)) {
-                    unlink($oldPhotoPath);
-                }
-            }
-
-            $file = $request->file('profile_photo');
-
-            $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-
-            // File akan masuk ke folder: public/profile_photo
-            $destinationPath = base_path('profile_photo');
-
-            if (!file_exists($destinationPath)) {
-                mkdir($destinationPath, 0755, true);
-            }
-
-            $file->move($destinationPath, $fileName);
-
-            // Yang disimpan ke database
-            $data['profile_photo'] = 'profile_photo/' . $fileName;
+            $data['profile_photo'] = $this->storePublicFile(
+                $request->file('profile_photo'),
+                'profile_photo'
+            );
         }
 
         $user->update($data);
@@ -85,11 +67,7 @@ class ProfileController extends Controller
         $user = auth()->user();
 
         if ($user->profile_photo) {
-            $photoPath = base_path($user->profile_photo);
-
-            if (file_exists($photoPath)) {
-                unlink($photoPath);
-            }
+            $this->deletePublicFile($user->profile_photo);
 
             $user->profile_photo = null;
             $user->save();
@@ -127,5 +105,38 @@ class ProfileController extends Controller
         return redirect()
             ->route('profile.password.form')
             ->with('success', 'Password berhasil diubah.');
+    }
+
+    private function storePublicFile($file, string $folder): string
+    {
+        $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+        $destinationPath = public_path($folder);
+
+        if (!is_dir($destinationPath)) {
+            mkdir($destinationPath, 0755, true);
+        }
+
+        $file->move($destinationPath, $fileName);
+
+        return $folder . '/' . $fileName;
+    }
+
+    private function deletePublicFile(?string $relativePath): void
+    {
+        if (!$relativePath) {
+            return;
+        }
+
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (str_contains($relativePath, '..')) {
+            return;
+        }
+
+        foreach ([public_path($relativePath), base_path($relativePath)] as $path) {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
     }
 }

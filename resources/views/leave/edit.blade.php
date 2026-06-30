@@ -144,7 +144,7 @@
 
                     @if($leave->lampiran)
                         <div class="mt-2">
-                            <a href="{{ asset($leave->lampiran) }}" target="_blank">
+                            <a href="{{ route('leave.attachment.show', $leave) }}" target="_blank">
                                 Lihat lampiran saat ini
                             </a>
                         </div>

@@ -85,15 +85,18 @@ class PayrollController extends Controller
 
         $data = $request->validate([
             'gaji_pokok' => 'required|numeric|min:0',
-            'potongan_absen' => 'required|numeric|min:0',
+            'potongan_per_absen' => 'nullable|numeric|min:0',
             'keterangan' => 'nullable|string|max:500',
         ]);
+
+        $potongan = $data['potongan_per_absen']
+            ?? $this->getPotonganPerAbsen((float) $data['gaji_pokok']);
 
         TeacherSalary::updateOrCreate(
             ['teacher_id' => $teacher->id],
             [
                 'gaji_pokok' => $data['gaji_pokok'],
-                'potongan_absen' => $data['potongan_absen'],
+                'potongan_per_absen' => $potongan,
                 'keterangan' => $data['keterangan'] ?? null,
             ]
         );
@@ -435,7 +438,7 @@ class PayrollController extends Controller
             }
 
             $teacherSalary = $leave->teacher->salary ?: $this->ensureTeacherSalary($leave->teacher);
-            $potonganPerHari = (float) $teacherSalary->potongan_absen;
+            $potonganPerHari = (float) $teacherSalary->potongan_per_absen;
 
             if ($potonganPerHari <= 0) {
                 continue;
@@ -529,7 +532,7 @@ class PayrollController extends Controller
             ['teacher_id' => $teacher->id],
             [
                 'gaji_pokok' => 0,
-                'potongan_absen' => $this->defaultDeductionByPosition($teacher->jabatan),
+                'potongan_per_absen' => $this->defaultDeductionByPosition($teacher->jabatan),
                 'keterangan' => 'Default otomatis. Silakan sesuaikan di menu pengaturan gaji.',
             ]
         );
@@ -586,7 +589,7 @@ class PayrollController extends Controller
                 ],
                 [
                     'gaji_pokok' => $gajiPokok,
-                    'potongan_absen' => $potongan,
+                    'potongan_per_absen' => $potongan,
                     'keterangan' => $data['keterangan'] ?? null,
                 ]
             );

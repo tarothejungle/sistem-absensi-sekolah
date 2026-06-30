@@ -4,7 +4,7 @@ Source code MVP full web untuk sistem absensi guru sekolah.
 
 ## Fitur
 - Login menggunakan NIP dan password
-- Role: guru, admin, kepala_sekolah, super_admin
+- Role: guru, bendahara, kepala_sekolah, super_admin
 - Absensi check-in dan check-out real-time
 - Validasi GPS geofencing sekolah
 - Capture wajah via webcam sebagai bukti audit biometrik
@@ -31,7 +31,7 @@ Source code MVP full web untuk sistem absensi guru sekolah.
    php artisan storage:link
    php artisan serve
 5. Login default:
-   - Admin: NIP ADM001, password password
+   - Super Admin: NIP ADM001, password password
    - Kepala Sekolah: NIP KS001, password password
    - Guru: NIP GURU001, password password
 

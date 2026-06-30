@@ -16,7 +16,7 @@ return new class extends Migration
 
             $table->enum('role', [
                 'guru',
-                'admin',
+                'bendahara',
                 'kepala_sekolah',
                 'super_admin',
             ])->default('guru');

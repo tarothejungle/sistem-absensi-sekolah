@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         if (!Schema::hasTable('users') || !Schema::hasColumn('users', 'role')) {
@@ -26,17 +23,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (!Schema::hasTable('users') || !Schema::hasColumn('users', 'role')) {
-            return;
-        }
-
-        $this->setRoleEnum(['guru', 'admin', 'bendahara', 'kepala_sekolah', 'super_admin']);
-
-        DB::table('users')
-            ->where('role', 'bendahara')
-            ->update(['role' => 'admin']);
-
-        $this->setRoleEnum(['guru', 'admin', 'kepala_sekolah', 'super_admin']);
+        // Migrasi ini hanya memastikan skema database lama mengikuti role aktif aplikasi.
     }
 
     private function setRoleEnum(array $roles): void
