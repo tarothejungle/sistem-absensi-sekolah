@@ -1118,9 +1118,11 @@
     @stack('styles')
 
     {{-- Final UI polish override --}}
-    <link href="{{ asset('css/absensi-ui-final.css') }}?v=20260608-rapi-notif-perpage" rel="stylesheet">
+    <link href="{{ asset('css/absensi-ui-final.css') }}?v=20260701-uiux-polish" rel="stylesheet">
 </head>
 <body>
+
+<a href="#mainContent" class="skip-link">Lewati ke konten utama</a>
 
 @php
     $user = auth()->user();
@@ -1131,7 +1133,14 @@
 {{-- TOPBAR --}}
 <div class="topbar">
     <div class="topbar-left">
-        <button class="brand-toggle" type="button" onclick="toggleSidebar()">
+        <button
+            class="brand-toggle"
+            type="button"
+            onclick="toggleSidebar()"
+            aria-label="Buka atau tutup menu navigasi"
+            aria-controls="sidebar"
+            aria-expanded="true"
+        >
             <img 
                 src="{{ asset('images/logo-MI.png') }}" 
                 alt="Logo MI" 
@@ -1150,7 +1159,15 @@
 
     <div class="topbar-right">
         <div class="notification-wrapper">
-            <button type="button" class="notification-button" onclick="toggleNotificationDropdown()" title="Notifikasi">
+            <button
+                type="button"
+                class="notification-button"
+                onclick="toggleNotificationDropdown()"
+                title="Notifikasi"
+                aria-label="Buka notifikasi"
+                aria-controls="notificationDropdown"
+                aria-expanded="false"
+            >
                 <i class="bi bi-bell-fill"></i>
                 @if(($appUnreadNotificationCount ?? 0) > 0)
                     <span class="notification-count">{{ $appUnreadNotificationCount > 99 ? '99+' : $appUnreadNotificationCount }}</span>
@@ -1203,7 +1220,14 @@
             </div>
         </div>
 
-        <button type="button" class="profile-button" onclick="toggleProfileDropdown()">
+        <button
+            type="button"
+            class="profile-button"
+            onclick="toggleProfileDropdown()"
+            aria-label="Buka menu profil"
+            aria-controls="profileDropdown"
+            aria-expanded="false"
+        >
             <div class="profile-text">
                 <div class="profile-name">{{ $displayName }}</div>
                 <div class="profile-role">{{ $roleLabel }}</div>
@@ -1222,7 +1246,7 @@
         @endif
         </button>
 
-        <div id="profileDropdown" class="profile-dropdown shadow">
+        <div id="profileDropdown" class="profile-dropdown shadow" role="menu">
             <a href="{{ route('profile.edit') }}">
                 <i class="bi bi-person me-2"></i> Ubah Profil
             </a>
@@ -1345,16 +1369,18 @@
 </aside>
 
 {{-- CONTENT --}}
-<main id="mainContent" class="main-content">
+<main id="mainContent" class="main-content" tabindex="-1">
     @if(session('success'))
-        <div class="alert alert-success">
-            {{ session('success') }}
+        <div class="alert alert-success app-flash" role="status">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>{{ session('success') }}</span>
         </div>
     @endif
 
     @if(session('error'))
-        <div class="alert alert-danger">
-            {{ session('error') }}
+        <div class="alert alert-danger app-flash" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>{{ session('error') }}</span>
         </div>
     @endif
 
@@ -1364,6 +1390,21 @@
 <script>
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('mainContent');
+    const brandToggle = document.querySelector('.brand-toggle');
+    const profileToggleButton = document.querySelector('.profile-button');
+    const notificationToggleButton = document.querySelector('.notification-button');
+
+    function updateSidebarToggleState() {
+        if (!brandToggle) {
+            return;
+        }
+
+        const isOpen = window.innerWidth <= 768
+            ? sidebar.classList.contains('mobile-open')
+            : !sidebar.classList.contains('collapsed');
+
+        brandToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
 
     function toggleSidebar() {
         const backdrop = document.getElementById('mobileSidebarBackdrop');
@@ -1375,6 +1416,8 @@
             if (backdrop) {
                 backdrop.classList.toggle('show');
             }
+
+            updateSidebarToggleState();
 
             return;
         }
@@ -1388,6 +1431,8 @@
         } else {
             localStorage.setItem('sidebar_state', 'open');
         }
+
+        updateSidebarToggleState();
     }
 
     window.addEventListener('resize', function () {
@@ -1401,6 +1446,8 @@
                 backdrop.classList.remove('show');
             }
         }
+
+        updateSidebarToggleState();
     });
 
     function toggleProfileDropdown() {
@@ -1408,7 +1455,17 @@
         if (notificationDropdown) {
             notificationDropdown.classList.remove('show');
         }
-        document.getElementById('profileDropdown').classList.toggle('show');
+
+        if (notificationToggleButton) {
+            notificationToggleButton.setAttribute('aria-expanded', 'false');
+        }
+
+        const profileDropdown = document.getElementById('profileDropdown');
+        profileDropdown.classList.toggle('show');
+
+        if (profileToggleButton) {
+            profileToggleButton.setAttribute('aria-expanded', profileDropdown.classList.contains('show') ? 'true' : 'false');
+        }
     }
 
     function toggleNotificationDropdown() {
@@ -1416,7 +1473,17 @@
         if (profileDropdown) {
             profileDropdown.classList.remove('show');
         }
-        document.getElementById('notificationDropdown').classList.toggle('show');
+
+        if (profileToggleButton) {
+            profileToggleButton.setAttribute('aria-expanded', 'false');
+        }
+
+        const notificationDropdown = document.getElementById('notificationDropdown');
+        notificationDropdown.classList.toggle('show');
+
+        if (notificationToggleButton) {
+            notificationToggleButton.setAttribute('aria-expanded', notificationDropdown.classList.contains('show') ? 'true' : 'false');
+        }
     }
 
     document.addEventListener('click', function(e) {
@@ -1429,11 +1496,54 @@
 
         if (profileDropdown && !profileButton && !profileArea) {
             profileDropdown.classList.remove('show');
+            if (profileToggleButton) {
+                profileToggleButton.setAttribute('aria-expanded', 'false');
+            }
         }
 
         if (notificationDropdown && !notificationButton && !notificationArea) {
             notificationDropdown.classList.remove('show');
+            if (notificationToggleButton) {
+                notificationToggleButton.setAttribute('aria-expanded', 'false');
+            }
         }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') {
+            return;
+        }
+
+        const profileDropdown = document.getElementById('profileDropdown');
+        const notificationDropdown = document.getElementById('notificationDropdown');
+        const backdrop = document.getElementById('mobileSidebarBackdrop');
+
+        if (profileDropdown) {
+            profileDropdown.classList.remove('show');
+        }
+
+        if (notificationDropdown) {
+            notificationDropdown.classList.remove('show');
+        }
+
+        if (profileToggleButton) {
+            profileToggleButton.setAttribute('aria-expanded', 'false');
+        }
+
+        if (notificationToggleButton) {
+            notificationToggleButton.setAttribute('aria-expanded', 'false');
+        }
+
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('mobile-open');
+            document.body.classList.remove('mobile-sidebar-open');
+
+            if (backdrop) {
+                backdrop.classList.remove('show');
+            }
+        }
+
+        updateSidebarToggleState();
     });
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -1444,6 +1554,30 @@
             mainContent.classList.add('expanded');
             document.body.classList.add('sidebar-is-collapsed');
         }
+
+        updateSidebarToggleState();
+
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function(event) {
+                if (form.dataset.noLoading === 'true') {
+                    return;
+                }
+
+                if (event.defaultPrevented) {
+                    return;
+                }
+
+                const submitter = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+
+                if (!submitter || submitter.disabled) {
+                    return;
+                }
+
+                submitter.classList.add('is-loading');
+                submitter.setAttribute('aria-busy', 'true');
+                submitter.disabled = true;
+            });
+        });
     });
 </script>
 
@@ -1470,4 +1604,4 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
-</html> 
+</html>
