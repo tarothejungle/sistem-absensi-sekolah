@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\LeaveRequest;
+use App\Models\Attendance;
 use App\Models\PayrollItem;
 use App\Models\PayrollItemDetail;
 use App\Models\PayrollPeriod;
@@ -293,6 +294,12 @@ class PayrollController extends Controller
                 }
             }
 
+            $this->applyAlphaDeductions(
+                $payrollItems,
+                $tanggalMulai,
+                $tanggalSelesai
+            );
+
             /*
             |------------------------------------------------------------
             | Hitung ulang gaji bersih serta catatan akhir.
@@ -474,6 +481,12 @@ class PayrollController extends Controller
             }
         }
 
+        $this->applyAlphaDeductions(
+            $items,
+            $start,
+            $end
+        );
+
         PayrollItem::where('payroll_period_id', $period->id)
             ->get()
             ->each(function (PayrollItem $item) {
@@ -516,6 +529,59 @@ class PayrollController extends Controller
             6 => 'sabtu',
             7 => 'minggu',
         ][$date->dayOfWeekIso];
+    }
+
+    private function applyAlphaDeductions(
+        array $payrollItems,
+        Carbon $tanggalMulai,
+        Carbon $tanggalSelesai
+    ): void {
+        $alphaAttendances = Attendance::with(['teacher.salary', 'attendanceSession'])
+            ->where('status_kehadiran', 'alfa')
+            ->whereDate('tanggal', '>=', $tanggalMulai->toDateString())
+            ->whereDate('tanggal', '<=', $tanggalSelesai->toDateString())
+            ->orderBy('tanggal')
+            ->get();
+
+        foreach ($alphaAttendances as $attendance) {
+            $teacher = $attendance->teacher;
+
+            if (!$teacher || !isset($payrollItems[$teacher->id])) {
+                continue;
+            }
+
+            $salary = $teacher->salary ?: $this->ensureTeacherSalary($teacher);
+            $potonganPerHari = $this->getPotonganPerAbsen((float) $salary->gaji_pokok);
+
+            if ((float) $salary->potongan_per_absen !== $potonganPerHari) {
+                $salary->update([
+                    'potongan_per_absen' => $potonganPerHari,
+                ]);
+            }
+
+            $payrollItem = $payrollItems[$teacher->id];
+            $tanggalEvent = $attendance->tanggal instanceof Carbon
+                ? $attendance->tanggal->copy()
+                : Carbon::parse($attendance->tanggal);
+            $labelTanggal = $tanggalEvent->format('d/m/Y');
+            $sessionLabel = $attendance->attendanceSession
+                ? ' (' . $attendance->attendanceSession->nama_sesi . ')'
+                : '';
+
+            $payrollItem->increment('potongan_absen', $potonganPerHari);
+            $payrollItem->increment('jumlah_absen_diganti', 1);
+
+            $payrollItem->details()->create([
+                'leave_request_id' => null,
+                'tanggal_event' => $tanggalEvent->toDateString(),
+                'tipe' => 'potongan_absen',
+                'nominal' => $potonganPerHari,
+                'keterangan' => 'Potongan alfa/tidak hadir pada '
+                    . $labelTanggal
+                    . $sessionLabel
+                    . '. Dana potongan masuk ke kas sekolah.',
+            ]);
+        }
     }
 
     private function ensureTeacherSalary(Teacher $teacher): TeacherSalary

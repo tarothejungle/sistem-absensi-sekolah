@@ -76,7 +76,6 @@
                 </table>
             </div>
             <div class="table-footer-row">
-                @include('partials.per-page-selector', ['paginator' => $items])
                 <div class="pagination-wrapper">{{ $items->links() }}</div>
             </div>
         </div>

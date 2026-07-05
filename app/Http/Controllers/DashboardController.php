@@ -54,7 +54,9 @@ class DashboardController extends Controller
 
         // DASHBOARD UNTUK ADMIN / SUPER ADMIN
         $expectedTeachers = $dailyAttendance->expectedTeachersForDate($today);
-        $totalGuru = $expectedTeachers->count();
+        $totalGuru = Teacher::whereHas('user', function ($query) {
+            $query->where('status', 'aktif');
+        })->count();
 
         // Sekaligus membuat status otomatis untuk sakit/izin/cuti/tugas luar/alfa bila syaratnya terpenuhi.
         $rekapHariIni = $dailyAttendance->syncForDate($today);
@@ -63,9 +65,9 @@ class DashboardController extends Controller
         $terlambatHariIni = $rekapHariIni->where('status_kehadiran', 'terlambat')->unique('teacher_id')->count();
         $tidakLengkapHariIni = $rekapHariIni->where('status_kehadiran', 'hadir_tidak_lengkap')->unique('teacher_id')->count();
 
-        // Belum absen berarti guru yang jadwalnya aktif hari ini belum punya status apa pun pada rekap hari ini.
+        // Belum absen dihitung dari guru yang memang wajib absen hari ini, bukan total guru aktif.
         $guruYangSudahAdaStatus = $rekapHariIni->pluck('teacher_id')->unique()->count();
-        $belumAbsenHariIni = max($totalGuru - $guruYangSudahAdaStatus, 0);
+        $belumAbsenHariIni = max($expectedTeachers->count() - $guruYangSudahAdaStatus, 0);
 
         // AKTIVITAS LOGIN USER
         $loginActivities = LoginActivity::latest()

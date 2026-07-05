@@ -1,39 +1,75 @@
-# Sistem Absensi Guru Berbasis Web - Laravel
+# Sistem Absensi Sekolah
 
-Source code MVP full web untuk sistem absensi guru sekolah.
+Sistem Absensi Sekolah adalah aplikasi web berbasis Laravel untuk mengelola kehadiran guru/karyawan sekolah, bukti foto absensi, izin/cuti, jadwal piket, hari libur, laporan, dan penggajian dalam satu dashboard operasional.
 
-## Fitur
-- Login menggunakan NIP dan password
-- Role: guru, bendahara, kepala_sekolah, super_admin
-- Absensi check-in dan check-out real-time
-- Validasi GPS geofencing sekolah
-- Capture wajah via webcam sebagai bukti audit biometrik
-- Pengajuan izin, sakit, cuti, tugas luar
-- Approval digital kepala sekolah
-- Dashboard rekap harian/bulanan
-- Grafik menggunakan Chart.js CDN
-- Export laporan CSV tanpa package tambahan
+Project ini disiapkan untuk kebutuhan internal sekolah, dengan fokus pada alur kerja harian yang mudah dipantau oleh guru/karyawan, kepala sekolah, bendahara, dan super admin.
 
-## Tech Stack
-- Laravel 12 / Laravel 11 compatible
+## Ringkasan Fitur
+
+- Login berbasis username/NIP dan password.
+- Hak akses role: guru, bendahara, kepala sekolah, dan super admin.
+- Dashboard ringkasan kehadiran harian.
+- Check-in dan check-out berdasarkan sesi absensi.
+- Validasi radius lokasi sekolah menggunakan geofence.
+- Face capture sebagai bukti foto check-in dan check-out.
+- Riwayat absensi per pengguna.
+- Pengajuan izin, sakit, cuti, dan tugas luar.
+- Approval izin/cuti oleh role yang berwenang.
+- Penunjukan guru infal/pengganti untuk pengajuan tertentu.
+- Laporan rekap absensi dengan filter status dan periode.
+- Preview dan export laporan ke Excel/PDF.
+- Laporan rekap guru infal.
+- Pengaturan data pengguna dan data guru.
+- Pengaturan lokasi sekolah.
+- Pengaturan sesi dan jam absensi.
+- Pengaturan hari libur.
+- Pengaturan hari piket per tanggal dengan toggle aktif/nonaktif.
+- Auto status alfa/tidak hadir setelah batas check-in berakhir.
+- Penggajian berbasis gaji pokok, potongan ketidakhadiran, potongan alfa, dan tambahan infal.
+- Tema tampilan light/dark.
+- UI responsif untuk desktop dan mobile.
+
+## Modul Utama
+
+### Dashboard
+
+Menampilkan ringkasan kehadiran hari ini, total guru/karyawan aktif, hadir lengkap, terlambat, tidak lengkap, dan belum absen. Perhitungan dashboard membedakan total guru aktif dari guru yang memang wajib absen pada tanggal berjalan.
+
+### Absensi
+
+Guru/karyawan dapat melakukan check-in dan check-out menggunakan kamera browser. Sistem menyimpan foto check-in dan check-out sebagai bukti audit, memvalidasi lokasi berdasarkan radius sekolah, serta mengikuti sesi absensi yang aktif.
+
+### Approval Izin/Cuti
+
+Role kepala sekolah dan super admin dapat meninjau dan memproses pengajuan izin/cuti. Role guru dan bendahara melihat menu sebagai Pengajuan Izin/Cuti.
+
+### Setting Hari Libur
+
+Super admin dapat menentukan tanggal libur aktif/nonaktif. Pada tanggal libur aktif, sistem tidak membuat alfa reguler kecuali guru/karyawan tersebut masuk jadwal piket aktif.
+
+### Setting Hari Piket
+
+Super admin dapat menentukan tanggal piket, memilih guru/karyawan yang bertugas, dan mengaktifkan atau menonaktifkan jadwal tersebut menggunakan toggle.
+
+### Laporan Rekap Absensi
+
+Menampilkan rekap absensi berdasarkan periode dan status, termasuk foto check-in dan check-out untuk membantu audit kehadiran.
+
+### Penggajian
+
+Sistem menghitung gaji berdasarkan gaji pokok, potongan izin/cuti/sakit tertentu, alfa/tidak hadir, serta tambahan untuk guru infal/pengganti. Potongan alfa dicatat sebagai potongan yang masuk ke kas sekolah.
+
+## Teknologi
+
+- Laravel 12
 - PHP 8.2+
 - MySQL/MariaDB
-- Bootstrap 5 CDN
-- Chart.js CDN
-
-## Cara Install
-1. Buat project Laravel baru:
-   composer create-project laravel/laravel absensi-guru
-2. Copy folder `app`, `database`, `resources`, `routes`, `public` dari source ini ke project Laravel.
-3. Atur `.env` database.
-4. Jalankan:
-   php artisan migrate:fresh --seed
-   php artisan storage:link
-   php artisan serve
-5. Login default:
-   - Super Admin: NIP ADM001, password password
-   - Kepala Sekolah: NIP KS001, password password
-   - Guru: NIP GURU001, password password
+- Bootstrap 5
+- Bootstrap Icons
+- Chart.js
+- Laravel DomPDF
+- Laravel Excel
 
 ## Catatan Face Recognition
-Versi hemat biaya ini menggunakan webcam capture sebagai bukti wajah dan fungsi verifikasi placeholder di `app/Services/FaceVerificationService.php`. Untuk face recognition sungguhan, hubungkan service tersebut ke API Python/FastAPI + OpenCV/face_recognition, atau face-api.js dengan model lokal.
+
+Versi saat ini menggunakan face capture/face verification sederhana sebagai bukti foto saat absensi. Untuk face recognition berbasis embedding wajah, integrasi yang disarankan adalah service Python lokal/self-hosted yang menerima foto dari Laravel, membuat embedding wajah, lalu mencocokkannya dengan data wajah guru/karyawan yang sudah didaftarkan.

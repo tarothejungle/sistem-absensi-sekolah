@@ -1,6 +1,35 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+    $attendancePhotoUrl = function (?string $path) {
+        if (!$path) {
+            return null;
+        }
+
+        $normalized = str_replace('\\', '/', trim($path));
+
+        if (preg_match('#^https?://#i', $normalized)) {
+            return $normalized;
+        }
+
+        $normalized = ltrim($normalized, '/');
+
+        if (str_starts_with($normalized, 'public/storage/')) {
+            $normalized = substr($normalized, strlen('public/'));
+        }
+
+        if (str_starts_with($normalized, 'storage/')) {
+            return asset($normalized);
+        }
+
+        if (str_starts_with($normalized, 'public/')) {
+            $normalized = substr($normalized, strlen('public/'));
+        }
+
+        return asset('storage/' . $normalized);
+    };
+@endphp
 
 <style>
     .report-action-buttons {
@@ -49,6 +78,7 @@
     }
 </style>
 
+<div class="container-fluid">
 <form action="{{ route('reports.index') }}" method="GET">
     <div class="ui-page-hero">
         <div>
@@ -63,16 +93,16 @@
             <span>Filter</span>
         </button>
 
-        <a 
-            href="{{ route('reports.export.excel', request()->query()) }}" 
+        <a
+            href="{{ route('reports.export.excel', request()->query()) }}"
             class="btn btn-success btn-report-action"
         >
             <i class="bi bi-file-earmark-excel-fill"></i>
             <span>Export Excel</span>
         </a>
 
-        <a 
-            href="{{ route('reports.export.pdf', request()->query()) }}" 
+        <a
+            href="{{ route('reports.export.pdf', request()->query()) }}"
             class="btn btn-danger btn-report-action"
             target="_blank"
         >
@@ -81,30 +111,30 @@
         </a>
     </div>
 
-        <div class="card mb-3">
+        <div class="card mb-3 ui-filter-card">
             <div class="card-body">
-                <div class="row align-items-end">
-                    <div class="col-md-4 mb-3">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4 ui-field">
                         <label class="form-label">Mulai</label>
-                        <input 
-                            type="date" 
-                            name="start_date" 
-                            class="form-control" 
+                        <input
+                            type="date"
+                            name="start_date"
+                            class="form-control"
                             value="{{ request('start_date') }}"
                         >
                     </div>
 
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-4 ui-field">
                         <label class="form-label">Selesai</label>
-                        <input 
-                            type="date" 
-                            name="end_date" 
-                            class="form-control" 
+                        <input
+                            type="date"
+                            name="end_date"
+                            class="form-control"
                             value="{{ request('end_date') }}"
                         >
                     </div>
 
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-4 ui-field">
                         <label class="form-label">Status</label>
                         <select name="status" class="form-control">
                             <option value="">Semua</option>
@@ -151,10 +181,11 @@
                 <thead>
                     <tr>
                         <th>Tanggal</th>
-                        <th>Username</th>
                         <th>Nama</th>
                         <th>Masuk</th>
                         <th>Pulang</th>
+                        <th>Foto Check-in</th>
+                        <th>Foto Check-out</th>
                         <th>Status</th>
                         <th>Terlambat</th>
                     </tr>
@@ -162,12 +193,13 @@
 
                 <tbody>
                     @forelse($attendances as $attendance)
+                        @php
+                            $checkInPhotoUrl = $attendancePhotoUrl($attendance->check_in_face_photo);
+                            $checkOutPhotoUrl = $attendancePhotoUrl($attendance->check_out_face_photo);
+                        @endphp
                         <tr>
                             <td>
                                 {{ \Carbon\Carbon::parse($attendance->tanggal)->format('d/m/Y') }}
-                            </td>
-                            <td>
-                                {{ $attendance->teacher->user->nip ?? '-' }}
                             </td>
                             <td>
                                 {{ $attendance->teacher->nama_lengkap ?? '-' }}
@@ -177,6 +209,70 @@
                             </td>
                             <td>
                                 {{ $attendance->check_out_time ? \Carbon\Carbon::parse($attendance->check_out_time)->timezone('Asia/Jakarta')->format('H:i') : '-' }}
+                            </td>
+                            <td>
+                                @if($checkInPhotoUrl)
+                                    <button
+                                        type="button"
+                                        class="attendance-face-button"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#checkInFaceModal{{ $attendance->id }}"
+                                    >
+                                        <img src="{{ $checkInPhotoUrl }}" alt="Foto check-in {{ $attendance->teacher->nama_lengkap ?? 'guru' }}" class="attendance-face-thumb">
+                                        <span>Lihat</span>
+                                    </button>
+
+                                    <div class="modal fade" id="checkInFaceModal{{ $attendance->id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content attendance-face-modal">
+                                                <div class="modal-header">
+                                                    <div>
+                                                        <h5 class="modal-title">Foto Check-in</h5>
+                                                        <small class="text-muted">{{ $attendance->teacher->nama_lengkap ?? '-' }} - {{ \Carbon\Carbon::parse($attendance->tanggal)->format('d/m/Y') }}</small>
+                                                    </div>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                                                </div>
+                                                <div class="modal-body text-center">
+                                                    <img src="{{ $checkInPhotoUrl }}" alt="Foto check-in" class="attendance-face-preview">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <span class="attendance-face-empty">Tidak ada</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($checkOutPhotoUrl)
+                                    <button
+                                        type="button"
+                                        class="attendance-face-button"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#checkOutFaceModal{{ $attendance->id }}"
+                                    >
+                                        <img src="{{ $checkOutPhotoUrl }}" alt="Foto check-out {{ $attendance->teacher->nama_lengkap ?? 'guru' }}" class="attendance-face-thumb">
+                                        <span>Lihat</span>
+                                    </button>
+
+                                    <div class="modal fade" id="checkOutFaceModal{{ $attendance->id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content attendance-face-modal">
+                                                <div class="modal-header">
+                                                    <div>
+                                                        <h5 class="modal-title">Foto Check-out</h5>
+                                                        <small class="text-muted">{{ $attendance->teacher->nama_lengkap ?? '-' }} - {{ \Carbon\Carbon::parse($attendance->tanggal)->format('d/m/Y') }}</small>
+                                                    </div>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                                                </div>
+                                                <div class="modal-body text-center">
+                                                    <img src="{{ $checkOutPhotoUrl }}" alt="Foto check-out" class="attendance-face-preview">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <span class="attendance-face-empty">Tidak ada</span>
+                                @endif
                             </td>
                             <td>
                                 @if($attendance->status_kehadiran === 'hadir')
@@ -207,7 +303,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="text-center text-muted">
+                            <td colspan="8" class="text-center text-muted">
                                 Belum ada data laporan absensi.
                             </td>
                         </tr>

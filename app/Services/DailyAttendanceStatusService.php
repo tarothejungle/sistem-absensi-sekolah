@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Attendance;
 use App\Models\AttendanceSession;
+use App\Models\DutySchedule;
+use App\Models\HolidaySetting;
 use App\Models\LeaveRequest;
 use App\Models\Teacher;
 use App\Models\WorkSchedule;
@@ -68,6 +70,8 @@ class DailyAttendanceStatusService
             }
         }
 
+        $this->removeUnexpectedSystemAttendances($targetDate, $teachers);
+
         return Attendance::with(['teacher.user', 'attendanceSession'])
             ->whereDate('tanggal', $todayString)
             ->whereHas('teacher.user', function ($query) {
@@ -84,8 +88,13 @@ class DailyAttendanceStatusService
     {
         $targetDate = $this->parseDate($date);
         $hari = $this->hariFromDate($targetDate);
+        $dutyTeachers = $this->activeDutyTeachersForDate($targetDate);
 
-        return Teacher::with(['user', 'schedules', 'attendanceSessions'])
+        if ($this->isActiveHoliday($targetDate)) {
+            return $dutyTeachers;
+        }
+
+        $scheduledTeachers = Teacher::with(['user', 'schedules', 'attendanceSessions'])
             ->whereHas('user', function ($query) {
                 $query->where('status', 'aktif');
             })
@@ -102,6 +111,53 @@ class DailyAttendanceStatusService
                 return $activeSchedules->contains('hari', $hari);
             })
             ->values();
+
+        return $scheduledTeachers
+            ->merge($dutyTeachers)
+            ->unique('id')
+            ->sortBy('nama_lengkap')
+            ->values();
+    }
+
+    private function activeDutyTeachersForDate(Carbon $targetDate): Collection
+    {
+        $dutySchedule = DutySchedule::with(['teachers.user', 'teachers.schedules', 'teachers.attendanceSessions'])
+            ->active()
+            ->whereDate('tanggal', $targetDate->toDateString())
+            ->first();
+
+        if (!$dutySchedule) {
+            return collect();
+        }
+
+        return $dutySchedule->teachers
+            ->filter(function ($teacher) {
+                return $teacher->user && $teacher->user->status === 'aktif';
+            })
+            ->sortBy('nama_lengkap')
+            ->values();
+    }
+
+    private function isActiveHoliday(Carbon $targetDate): bool
+    {
+        return HolidaySetting::active()
+            ->whereDate('tanggal', $targetDate->toDateString())
+            ->exists();
+    }
+
+    private function removeUnexpectedSystemAttendances(Carbon $targetDate, Collection $expectedTeachers): void
+    {
+        $expectedTeacherIds = $expectedTeachers->pluck('id')->all();
+
+        Attendance::whereDate('tanggal', $targetDate->toDateString())
+            ->where('device_info', 'system-auto-status')
+            ->whereNull('check_in_time')
+            ->whereNull('check_out_time')
+            ->when(
+                !empty($expectedTeacherIds),
+                fn ($query) => $query->whereNotIn('teacher_id', $expectedTeacherIds)
+            )
+            ->delete();
     }
 
     private function createOrUpdateSystemAttendance(

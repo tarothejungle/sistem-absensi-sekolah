@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Sistem Absensi Guru</title>
+    <title>Sistem Absensi Sekolah</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     {{-- Bootstrap --}}
@@ -15,6 +15,18 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        (function() {
+            try {
+                const savedTheme = localStorage.getItem('app_theme');
+                const preferredTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-theme', preferredTheme === 'dark' ? 'dark' : 'light');
+            } catch (error) {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
 
     <style>
         body {
@@ -1118,9 +1130,9 @@
     @stack('styles')
 
     {{-- Final UI polish override --}}
-    <link href="{{ asset('css/absensi-ui-final.css') }}?v=20260701-uiux-polish" rel="stylesheet">
+    <link href="{{ asset('css/absensi-ui-final.css') }}?v=20260705-sidebar-search-report-fix" rel="stylesheet">
 </head>
-<body>
+<body class="app-shell">
 
 <a href="#mainContent" class="skip-link">Lewati ke konten utama</a>
 
@@ -1128,36 +1140,278 @@
     $user = auth()->user();
     $displayName = $user->name ?? $user->nip;
     $roleLabel = ucwords(str_replace('_', ' ', $user->role));
+    $appPageTitle = match (true) {
+        request()->routeIs('dashboard') => 'Dashboard',
+        request()->routeIs('attendance.*') => 'Absensi',
+        request()->routeIs('leave.*') => in_array($user->role, ['kepala_sekolah', 'super_admin']) ? 'Approval Izin/Cuti' : 'Pengajuan Izin/Cuti',
+        request()->routeIs('admin.users*') => 'Data Pengguna',
+        request()->routeIs('admin.teachers*') => 'Data Guru',
+        request()->routeIs('admin.location*') => 'Setting Lokasi Sekolah',
+        request()->routeIs('admin.attendance-sessions*') => 'Setting Sesi',
+        request()->routeIs('admin.holidays*') => 'Setting Hari Libur',
+        request()->routeIs('admin.duty-schedules*') => 'Setting Hari Piket',
+        request()->routeIs('reports.*') => 'Laporan Rekap Absensi',
+        request()->routeIs('payroll.*') => 'Laporan Penggajian',
+        request()->routeIs('infal.report.*') => 'Laporan Rekap Infal',
+        request()->routeIs('profile.*') => 'Profil',
+        default => 'Sistem Absensi Sekolah',
+    };
+
+    $mobileNavItems = [
+        [
+            'url' => route('dashboard'),
+            'active' => request()->routeIs('dashboard'),
+            'icon' => 'bi-speedometer2',
+            'label' => 'Dashboard',
+        ],
+    ];
+
+    if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah'])) {
+        $mobileNavItems[] = [
+            'url' => route('attendance.index'),
+            'active' => request()->routeIs('attendance.*'),
+            'icon' => 'bi-camera',
+            'label' => 'Absensi',
+        ];
+    }
+
+    if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'super_admin'])) {
+        $mobileNavItems[] = [
+            'url' => route('leave.index'),
+            'active' => request()->routeIs('leave.*'),
+            'icon' => 'bi-file-earmark-text',
+            'label' => in_array($user->role, ['kepala_sekolah', 'super_admin']) ? 'Approval' : 'Pengajuan',
+        ];
+    }
+
+    if (in_array($user->role, ['super_admin', 'kepala_sekolah'])) {
+        $mobileNavItems[] = [
+            'url' => route('reports.index'),
+            'active' => request()->routeIs('reports.*'),
+            'icon' => 'bi-bar-chart',
+            'label' => 'Laporan',
+        ];
+    }
+
+    if ($user->role === 'bendahara') {
+        $mobileNavItems[] = [
+            'url' => route('infal.report.index'),
+            'active' => request()->routeIs('infal.report.*'),
+            'icon' => 'bi-file-earmark-bar-graph',
+            'label' => 'Infal',
+        ];
+    }
+
+    if (in_array($user->role, ['super_admin', 'bendahara'])) {
+        $mobileNavItems[] = [
+            'url' => route('payroll.index'),
+            'active' => request()->routeIs('payroll.*'),
+            'icon' => 'bi-cash-coin',
+            'label' => 'Gaji',
+        ];
+    }
+
+    if ($user->role === 'super_admin') {
+        $mobileNavItems[] = [
+            'url' => route('admin.teachers'),
+            'active' => request()->routeIs('admin.teachers*'),
+            'icon' => 'bi-person-badge',
+            'label' => 'Guru',
+        ];
+    }
+
+    $mobileNavItems = array_slice($mobileNavItems, 0, 5);
+
+    $mainSidebarItems = [
+        [
+            'url' => route('dashboard'),
+            'active' => request()->routeIs('dashboard'),
+            'icon' => 'bi-speedometer2',
+            'label' => 'Dashboard',
+        ],
+    ];
+
+    if ($user->role === 'super_admin') {
+        $mainSidebarItems[] = [
+            'url' => route('admin.users'),
+            'active' => request()->routeIs('admin.users*'),
+            'icon' => 'bi-people',
+            'label' => 'Data Pengguna',
+        ];
+        $mainSidebarItems[] = [
+            'url' => route('admin.teachers'),
+            'active' => request()->routeIs('admin.teachers*'),
+            'icon' => 'bi-person-badge',
+            'label' => 'Data Guru',
+        ];
+        $mainSidebarItems[] = [
+            'url' => route('leave.index'),
+            'active' => request()->routeIs('leave.*'),
+            'icon' => 'bi-file-earmark-text',
+            'label' => 'Approval Izin/Cuti',
+        ];
+    } else {
+        if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah'])) {
+            $mainSidebarItems[] = [
+                'url' => route('attendance.index'),
+                'active' => request()->routeIs('attendance.*'),
+                'icon' => 'bi-camera',
+                'label' => 'Absensi',
+            ];
+        }
+
+        if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah'])) {
+            $mainSidebarItems[] = [
+                'url' => route('leave.index'),
+                'active' => request()->routeIs('leave.*'),
+                'icon' => 'bi-file-earmark-text',
+                'label' => $user->role === 'kepala_sekolah' ? 'Approval Izin/Cuti' : 'Pengajuan Izin/Cuti',
+            ];
+        }
+    }
+
+    $settingSidebarItems = [];
+
+    if ($user->role === 'super_admin') {
+        $settingSidebarItems = [
+            [
+                'url' => route('admin.attendance-sessions.index'),
+                'active' => request()->routeIs('admin.attendance-sessions*'),
+                'icon' => 'bi-clock-history',
+                'label' => 'Setting Sesi dan Jam Absensi',
+            ],
+            [
+                'url' => route('admin.location'),
+                'active' => request()->routeIs('admin.location*'),
+                'icon' => 'bi-geo-alt',
+                'label' => 'Setting Lokasi Sekolah',
+            ],
+            [
+                'url' => route('admin.duty-schedules.index'),
+                'active' => request()->routeIs('admin.duty-schedules*'),
+                'icon' => 'bi-person-check',
+                'label' => 'Setting Hari Piket',
+            ],
+            [
+                'url' => route('admin.holidays.index'),
+                'active' => request()->routeIs('admin.holidays*'),
+                'icon' => 'bi-calendar-x',
+                'label' => 'Setting Hari Libur',
+            ],
+        ];
+    }
+
+    $reportSidebarItems = [];
+
+    if ($user->role === 'super_admin') {
+        $reportSidebarItems = [
+            [
+                'url' => route('reports.index'),
+                'active' => request()->routeIs('reports.*'),
+                'icon' => 'bi-bar-chart',
+                'label' => 'Laporan Rekap Absensi',
+            ],
+            [
+                'url' => route('infal.report.index'),
+                'active' => request()->routeIs('infal.report.*'),
+                'icon' => 'bi-file-earmark-bar-graph',
+                'label' => 'Laporan Rekap Infal',
+            ],
+            [
+                'url' => route('payroll.index'),
+                'active' => request()->routeIs('payroll.*'),
+                'icon' => 'bi-cash-coin',
+                'label' => 'Laporan Penggajian',
+            ],
+        ];
+    } elseif ($user->role === 'kepala_sekolah') {
+        $reportSidebarItems = [
+            [
+                'url' => route('reports.index'),
+                'active' => request()->routeIs('reports.*'),
+                'icon' => 'bi-bar-chart',
+                'label' => 'Laporan Rekap Absensi',
+            ],
+            [
+                'url' => route('infal.report.index'),
+                'active' => request()->routeIs('infal.report.*'),
+                'icon' => 'bi-file-earmark-bar-graph',
+                'label' => 'Laporan Rekap Infal',
+            ],
+        ];
+    } elseif ($user->role === 'bendahara') {
+        $reportSidebarItems = [
+            [
+                'url' => route('infal.report.index'),
+                'active' => request()->routeIs('infal.report.*'),
+                'icon' => 'bi-file-earmark-bar-graph',
+                'label' => 'Laporan Rekap Infal',
+            ],
+            [
+                'url' => route('payroll.index'),
+                'active' => request()->routeIs('payroll.*'),
+                'icon' => 'bi-cash-coin',
+                'label' => 'Laporan Penggajian',
+            ],
+        ];
+    }
+
+    $sidebarGroups = array_values(array_filter([
+        [
+            'label' => 'MAIN',
+            'icon' => 'bi-grid',
+            'items' => $mainSidebarItems,
+        ],
+        [
+            'label' => 'SETTING',
+            'icon' => 'bi-sliders',
+            'items' => $settingSidebarItems,
+        ],
+        [
+            'label' => 'REPORT',
+            'icon' => 'bi-clipboard2-data',
+            'items' => $reportSidebarItems,
+        ],
+    ], fn ($group) => count($group['items']) > 0));
 @endphp
 
 {{-- TOPBAR --}}
 <div class="topbar">
     <div class="topbar-left">
         <button
-            class="brand-toggle"
+            class="app-menu-button"
             type="button"
             onclick="toggleSidebar()"
             aria-label="Buka atau tutup menu navigasi"
             aria-controls="sidebar"
             aria-expanded="true"
         >
-            <img 
-                src="{{ asset('images/logo-MI.png') }}" 
-                alt="Logo MI" 
-                class="brand-logo"
-            >
-
-            <span class="brand-text">
-                MI Lantaburo
-            </span>
+            <i class="bi bi-list"></i>
         </button>
     </div>
 
     <div class="topbar-title">
-        Sistem Absensi Guru
+        <span class="topbar-mobile-brand">
+            <img src="{{ asset('images/logo-MI.png') }}" alt="Logo MI">
+            <span>MI Lantaburo</span>
+        </span>
+        <span class="topbar-title-main">{{ $appPageTitle }}</span>
+        <span class="topbar-title-sub">{{ now()->translatedFormat('l, d F Y') }}</span>
     </div>
 
     <div class="topbar-right">
+        <button
+            type="button"
+            class="theme-toggle"
+            id="themeToggle"
+            aria-label="Ganti tema tampilan"
+            aria-pressed="false"
+            title="Ganti tema"
+        >
+            <i class="bi bi-moon-stars"></i>
+            <span class="theme-toggle-text">Tema</span>
+        </button>
+
         <div class="notification-wrapper">
             <button
                 type="button"
@@ -1244,6 +1498,7 @@
                 {{ strtoupper(substr(auth()->user()->name ?? auth()->user()->nip, 0, 1)) }}
             </div>
         @endif
+            <i class="bi bi-chevron-down profile-chevron" aria-hidden="true"></i>
         </button>
 
         <div id="profileDropdown" class="profile-dropdown shadow" role="menu">
@@ -1255,7 +1510,7 @@
                 <i class="bi bi-key me-2"></i> Ubah Password
             </a>
 
-            <form action="{{ route('logout') }}" method="POST" class="m-0">
+            <form action="{{ route('logout') }}" method="POST" class="m-0 logout-form" data-confirm-logout="true" data-no-loading="true">
                 @csrf
                 <button type="submit" class="text-danger">
                     <i class="bi bi-box-arrow-right me-2"></i> Logout
@@ -1267,143 +1522,224 @@
 
 {{-- SIDEBAR --}}
 <div id="mobileSidebarBackdrop" class="mobile-sidebar-backdrop" onclick="toggleSidebar()"></div>
-<aside id="sidebar" class="app-sidebar">
+<aside id="sidebar" class="app-sidebar" aria-label="Navigasi utama">
+    <div class="sidebar-brand">
+        <img src="{{ asset('images/logo-MI.png') }}" alt="Logo MI" class="sidebar-brand-logo">
+        <span class="sidebar-brand-name">MI Lantaburo</span>
+    </div>
 
     <div class="sidebar-menu">
-        <a href="{{ route('dashboard') }}" class="sidebar-link {{ request()->routeIs('dashboard') ? 'active' : '' }}">
-            <i class="bi bi-speedometer2"></i>
-            <span class="sidebar-text">Dashboard</span>
-        </a>
+        @foreach($sidebarGroups as $group)
+            @php
+                $isGroupActive = collect($group['items'])->contains(fn ($item) => $item['active']);
+            @endphp
+            <details class="sidebar-group {{ $isGroupActive ? 'is-active' : '' }}" open>
+                <summary class="sidebar-group-toggle">
+                    <span class="sidebar-group-title">
+                        <i class="bi {{ $group['icon'] }}"></i>
+                        <span class="sidebar-text">{{ $group['label'] }}</span>
+                    </span>
+                    <i class="bi bi-chevron-down sidebar-group-chevron" aria-hidden="true"></i>
+                </summary>
 
-        @if($user->role === 'guru')
-            <a href="{{ route('attendance.index') }}" class="sidebar-link {{ request()->routeIs('attendance.*') ? 'active' : '' }}">
-                <i class="bi bi-camera"></i>
-                <span class="sidebar-text">Absensi</span>
-            </a>
-            
-            <a href="{{ route('leave.index') }}" 
-            class="sidebar-link {{ request()->routeIs('leave.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-text"></i>
-                <span class="sidebar-text">Izin/Cuti</span>
-            </a>
-        @endif
-
-        @if(in_array($user->role, ['kepala_sekolah', 'super_admin']))
-            <a href="{{ route('leave.index') }}" class="sidebar-link {{ request()->routeIs('leave.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-text"></i>
-                <span class="sidebar-text">Approval Izin/Cuti</span>
-            </a>
-        @endif
-
-        @if(in_array($user->role, ['super_admin']))
-            <a href="{{ route('admin.users') }}" class="sidebar-link {{ request()->routeIs('admin.users*') ? 'active' : '' }}">
-                <i class="bi bi-people"></i>
-                <span class="sidebar-text">Data Pengguna</span>
-            </a>
-
-            <a href="{{ route('admin.teachers') }}" class="sidebar-link {{ request()->routeIs('admin.teachers*') ? 'active' : '' }}">
-                <i class="bi bi-person-badge"></i>
-                <span class="sidebar-text">Data Guru</span>
-            </a>
-
-            <a href="{{ route('admin.location') }}" class="sidebar-link {{ request()->routeIs('admin.location*') ? 'active' : '' }}">
-                <i class="bi bi-geo-alt"></i>
-                <span class="sidebar-text">Lokasi Sekolah</span>
-            </a>
-
-            <a href="{{ route('admin.attendance-sessions.index') }}" class="sidebar-link {{ request()->routeIs('admin.attendance-sessions*') ? 'active' : '' }}">
-                <i class="bi bi-clock-history"></i>
-                <span class="sidebar-text">Pengaturan Sesi dan Jam Absensi</span>
-            </a>
-
-            <a href="{{ route('reports.index') }}" class="sidebar-link {{ request()->routeIs('reports.*') ? 'active' : '' }}">
-                <i class="bi bi-bar-chart"></i>
-                <span class="sidebar-text">Laporan Rekap Absensi</span>
-            </a>
-
-            <a href="{{ route('payroll.index') }}" class="sidebar-link {{ request()->routeIs('payroll.*') ? 'active' : '' }}">
-                <i class="bi bi-cash-coin"></i>
-                <span class="sidebar-text">Penggajian</span>
-            </a>
-        @endif
-
-        @if(in_array($user->role, ['kepala_sekolah']))
-            <a href="{{ route('attendance.index') }}"
-                class="sidebar-link {{ request()->routeIs('attendance.*') ? 'active' : '' }}">
-                <i class="bi bi-camera"></i>
-                <span class="sidebar-text">Absensi</span>
-            </a>
-            <a href="{{ route('reports.index') }}" 
-                class="sidebar-link {{ request()->routeIs('reports.*') ? 'active' : '' }}">
-                <i class="bi bi-bar-chart"></i>
-                <span class="sidebar-text">Laporan Rekap Absensi</span>
-            </a>
-        @endif
-
-        @if(auth()->user()->role === 'bendahara')
-            <a href="{{ route('attendance.index') }}"
-            class="sidebar-link {{ request()->routeIs('attendance.*') ? 'active' : '' }}">
-                <i class="bi bi-camera"></i>
-                <span class="sidebar-text">Absensi</span>
-            </a>
-
-            <a href="{{ route('leave.index') }}" 
-            class="sidebar-link {{ request()->routeIs('leave.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-text"></i>
-                <span class="sidebar-text">Izin/Cuti</span>
-            </a>
-
-            <a href="{{ route('infal.report.index') }}"
-            class="sidebar-link {{ request()->routeIs('infal.report.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-bar-graph"></i>
-                <span class="sidebar-text">Rekap Guru Infal</span>
-            </a>
-
-            <a href="{{ route('payroll.index') }}"
-            class="sidebar-link {{ request()->routeIs('payroll.*') ? 'active' : '' }}">
-                <i class="bi bi-cash-coin"></i>
-                <span class="sidebar-text">Penggajian</span>
-            </a>
-        @endif
+                <div class="sidebar-submenu">
+                    @foreach($group['items'] as $item)
+                        <a href="{{ $item['url'] }}" class="sidebar-link {{ $item['active'] ? 'active' : '' }}">
+                            <i class="bi {{ $item['icon'] }}"></i>
+                            <span class="sidebar-text">{{ $item['label'] }}</span>
+                        </a>
+                    @endforeach
+                </div>
+            </details>
+        @endforeach
     </div>
 </aside>
 
+<nav class="mobile-bottom-nav" aria-label="Navigasi cepat">
+    @foreach($mobileNavItems as $item)
+        <a href="{{ $item['url'] }}" class="mobile-bottom-link {{ $item['active'] ? 'active' : '' }}">
+            <i class="bi {{ $item['icon'] }}"></i>
+            <span>{{ $item['label'] }}</span>
+        </a>
+    @endforeach
+</nav>
+
 {{-- CONTENT --}}
 <main id="mainContent" class="main-content" tabindex="-1">
+    @yield('content')
+</main>
+
+<div id="appToastStack" class="app-toast-stack" aria-live="polite" aria-atomic="true">
     @if(session('success'))
-        <div class="alert alert-success app-flash" role="status">
-            <i class="bi bi-check-circle-fill"></i>
-            <span>{{ session('success') }}</span>
+        <div class="app-toast app-toast-success" role="status" data-app-toast>
+            <div class="app-toast-icon">
+                <i class="bi bi-check2-circle"></i>
+            </div>
+            <div class="app-toast-copy">
+                <strong>Berhasil</strong>
+                <span>{{ session('success') }}</span>
+            </div>
+            <button type="button" class="app-toast-close" aria-label="Tutup notifikasi" data-toast-close>
+                <i class="bi bi-x-lg"></i>
+            </button>
         </div>
     @endif
 
     @if(session('error'))
-        <div class="alert alert-danger app-flash" role="alert">
-            <i class="bi bi-exclamation-triangle-fill"></i>
-            <span>{{ session('error') }}</span>
+        <div class="app-toast app-toast-danger" role="alert" data-app-toast>
+            <div class="app-toast-icon">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <div class="app-toast-copy">
+                <strong>Perlu Diperiksa</strong>
+                <span>{{ session('error') }}</span>
+            </div>
+            <button type="button" class="app-toast-close" aria-label="Tutup notifikasi" data-toast-close>
+                <i class="bi bi-x-lg"></i>
+            </button>
         </div>
     @endif
 
-    @yield('content')
-</main>
+    @if($errors->any())
+        <div class="app-toast app-toast-danger" role="alert" data-app-toast>
+            <div class="app-toast-icon">
+                <i class="bi bi-list-check"></i>
+            </div>
+            <div class="app-toast-copy">
+                <strong>Form Belum Lengkap</strong>
+                <span>{{ $errors->count() }} bagian perlu diperbaiki sebelum disimpan.</span>
+            </div>
+            <button type="button" class="app-toast-close" aria-label="Tutup notifikasi" data-toast-close>
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    @endif
+</div>
+
+<div id="logoutConfirmDialog" class="logout-confirm-dialog" aria-hidden="true">
+    <div class="logout-confirm-backdrop" data-logout-cancel></div>
+    <section
+        class="logout-confirm-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="logoutConfirmTitle"
+        aria-describedby="logoutConfirmMessage"
+        tabindex="-1"
+    >
+        <div class="logout-confirm-icon">
+            <i class="bi bi-box-arrow-right"></i>
+        </div>
+        <div class="logout-confirm-copy">
+            <h2 id="logoutConfirmTitle">Keluar dari aplikasi?</h2>
+            <p id="logoutConfirmMessage">Sesi Anda akan ditutup. Pastikan semua perubahan yang sedang dikerjakan sudah tersimpan.</p>
+        </div>
+        <div class="logout-confirm-actions">
+            <button type="button" class="logout-confirm-cancel" data-logout-cancel>
+                Batal
+            </button>
+            <button type="button" class="logout-confirm-submit" id="logoutConfirmSubmit">
+                <i class="bi bi-check2-circle"></i>
+                Ya, Logout
+            </button>
+        </div>
+    </section>
+</div>
+
+<div id="appConfirmDialog" class="app-confirm-dialog" aria-hidden="true">
+    <div class="app-confirm-backdrop" data-confirm-cancel></div>
+    <section
+        class="app-confirm-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="appConfirmTitle"
+        aria-describedby="appConfirmMessage"
+        tabindex="-1"
+    >
+        <div class="app-confirm-icon" id="appConfirmIconWrap">
+            <i id="appConfirmIcon" class="bi bi-question-circle"></i>
+        </div>
+        <div class="app-confirm-copy">
+            <h2 id="appConfirmTitle">Konfirmasi Aksi</h2>
+            <p id="appConfirmMessage">Pastikan data yang dipilih sudah benar sebelum melanjutkan.</p>
+        </div>
+        <div class="app-confirm-actions">
+            <button type="button" class="app-confirm-cancel" data-confirm-cancel>
+                Batal
+            </button>
+            <button type="button" class="app-confirm-submit" id="appConfirmSubmit">
+                <i class="bi bi-check2-circle"></i>
+                <span id="appConfirmSubmitText">Lanjutkan</span>
+            </button>
+        </div>
+    </section>
+</div>
 
 <script>
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('mainContent');
-    const brandToggle = document.querySelector('.brand-toggle');
+    const sidebarToggleButtons = document.querySelectorAll('.app-menu-button');
     const profileToggleButton = document.querySelector('.profile-button');
     const notificationToggleButton = document.querySelector('.notification-button');
+    const themeToggleButton = document.getElementById('themeToggle');
+    const logoutConfirmDialog = document.getElementById('logoutConfirmDialog');
+    const logoutConfirmSubmit = document.getElementById('logoutConfirmSubmit');
+    const appConfirmDialog = document.getElementById('appConfirmDialog');
+    const appConfirmSubmit = document.getElementById('appConfirmSubmit');
+    const appConfirmSubmitText = document.getElementById('appConfirmSubmitText');
+    const appConfirmTitle = document.getElementById('appConfirmTitle');
+    const appConfirmMessage = document.getElementById('appConfirmMessage');
+    const appConfirmIcon = document.getElementById('appConfirmIcon');
+    const appConfirmIconWrap = document.getElementById('appConfirmIconWrap');
+    let pendingLogoutForm = null;
+    let pendingConfirmForm = null;
+    let pendingConfirmSubmitter = null;
 
     function updateSidebarToggleState() {
-        if (!brandToggle) {
-            return;
-        }
-
         const isOpen = window.innerWidth <= 768
             ? sidebar.classList.contains('mobile-open')
             : !sidebar.classList.contains('collapsed');
 
-        brandToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        sidebarToggleButtons.forEach(function(button) {
+            button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+    }
+
+    function getPreferredAppTheme() {
+        const savedTheme = localStorage.getItem('app_theme');
+
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+            return savedTheme;
+        }
+
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function applyAppTheme(theme) {
+        const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+        const isDark = normalizedTheme === 'dark';
+
+        document.documentElement.setAttribute('data-theme', normalizedTheme);
+        localStorage.setItem('app_theme', normalizedTheme);
+
+        if (!themeToggleButton) {
+            return;
+        }
+
+        const icon = themeToggleButton.querySelector('i');
+        const label = themeToggleButton.querySelector('.theme-toggle-text');
+
+        themeToggleButton.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+        themeToggleButton.setAttribute('title', isDark ? 'Gunakan tema terang' : 'Gunakan tema gelap');
+        themeToggleButton.setAttribute('aria-label', isDark ? 'Gunakan tema terang' : 'Gunakan tema gelap');
+
+        if (icon) {
+            icon.classList.toggle('bi-moon-stars', !isDark);
+            icon.classList.toggle('bi-sun', isDark);
+        }
+
+        if (label) {
+            label.textContent = isDark ? 'Terang' : 'Gelap';
+        }
     }
 
     function toggleSidebar() {
@@ -1486,6 +1822,181 @@
         }
     }
 
+    function openLogoutConfirm(form) {
+        pendingLogoutForm = form;
+
+        if (!logoutConfirmDialog) {
+            form.submit();
+            return;
+        }
+
+        const profileDropdown = document.getElementById('profileDropdown');
+
+        if (profileDropdown) {
+            profileDropdown.classList.remove('show');
+        }
+
+        if (profileToggleButton) {
+            profileToggleButton.setAttribute('aria-expanded', 'false');
+        }
+
+        logoutConfirmDialog.classList.add('show');
+        logoutConfirmDialog.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('logout-confirm-open');
+
+        const dialogCard = logoutConfirmDialog.querySelector('.logout-confirm-card');
+
+        if (dialogCard) {
+            dialogCard.focus();
+        }
+    }
+
+    function closeLogoutConfirm() {
+        if (!logoutConfirmDialog) {
+            return;
+        }
+
+        logoutConfirmDialog.classList.remove('show');
+        logoutConfirmDialog.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('logout-confirm-open');
+        pendingLogoutForm = null;
+    }
+
+    function closeToast(toast) {
+        if (!toast) {
+            return;
+        }
+
+        toast.classList.add('is-hiding');
+        window.setTimeout(function() {
+            toast.remove();
+        }, 180);
+    }
+
+    function setupToast(toast) {
+        if (!toast) {
+            return;
+        }
+
+        const closeButton = toast.querySelector('[data-toast-close]');
+        const isDanger = toast.classList.contains('app-toast-danger');
+        const timeout = isDanger ? 8500 : 6200;
+
+        if (closeButton) {
+            closeButton.addEventListener('click', function() {
+                closeToast(toast);
+            });
+        }
+
+        window.setTimeout(function() {
+            closeToast(toast);
+        }, timeout);
+    }
+
+    window.showAppToast = function(type, message, title) {
+        const stack = document.getElementById('appToastStack');
+
+        if (!stack || !message) {
+            return;
+        }
+
+        const normalizedType = type === 'success' ? 'success' : (type === 'warning' ? 'warning' : 'danger');
+        const iconClass = normalizedType === 'success'
+            ? 'bi-check2-circle'
+            : (normalizedType === 'warning' ? 'bi-exclamation-circle' : 'bi-exclamation-triangle');
+        const defaultTitle = normalizedType === 'success'
+            ? 'Berhasil'
+            : (normalizedType === 'warning' ? 'Perhatian' : 'Perlu Diperiksa');
+
+        const toast = document.createElement('div');
+        toast.className = 'app-toast app-toast-' + normalizedType;
+        toast.setAttribute('role', normalizedType === 'success' ? 'status' : 'alert');
+        toast.setAttribute('data-app-toast', '');
+        toast.innerHTML = `
+            <div class="app-toast-icon"><i class="bi ${iconClass}"></i></div>
+            <div class="app-toast-copy">
+                <strong>${title || defaultTitle}</strong>
+                <span></span>
+            </div>
+            <button type="button" class="app-toast-close" aria-label="Tutup notifikasi" data-toast-close>
+                <i class="bi bi-x-lg"></i>
+            </button>
+        `;
+
+        toast.querySelector('.app-toast-copy span').textContent = message;
+        stack.appendChild(toast);
+        setupToast(toast);
+    };
+
+    function openActionConfirm(form, submitter) {
+        pendingConfirmForm = form;
+        pendingConfirmSubmitter = submitter || null;
+
+        if (!appConfirmDialog) {
+            form.submit();
+            return;
+        }
+
+        const type = form.dataset.confirmType || submitter?.dataset.confirmType || 'danger';
+        const title = form.dataset.confirmTitle || submitter?.dataset.confirmTitle || 'Konfirmasi Aksi';
+        const message = form.dataset.confirmMessage || submitter?.dataset.confirmMessage || 'Pastikan data yang dipilih sudah benar sebelum melanjutkan.';
+        const buttonText = form.dataset.confirmSubmit || submitter?.dataset.confirmSubmit || 'Lanjutkan';
+        const iconClass = form.dataset.confirmIcon || submitter?.dataset.confirmIcon || (type === 'success' ? 'bi-check2-circle' : (type === 'warning' ? 'bi-exclamation-circle' : 'bi-trash3'));
+
+        appConfirmDialog.dataset.confirmType = type;
+        appConfirmTitle.textContent = title;
+        appConfirmMessage.textContent = message;
+        appConfirmSubmitText.textContent = buttonText;
+        appConfirmIcon.className = 'bi ' + iconClass;
+        appConfirmIconWrap.className = 'app-confirm-icon app-confirm-' + type;
+        appConfirmSubmit.className = 'app-confirm-submit app-confirm-submit-' + type;
+
+        appConfirmSubmit.disabled = false;
+        appConfirmSubmit.classList.remove('is-loading');
+        appConfirmDialog.classList.add('show');
+        appConfirmDialog.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('app-confirm-open');
+
+        const dialogCard = appConfirmDialog.querySelector('.app-confirm-card');
+
+        if (dialogCard) {
+            dialogCard.focus();
+        }
+    }
+
+    function closeActionConfirm() {
+        if (!appConfirmDialog) {
+            return;
+        }
+
+        appConfirmDialog.classList.remove('show');
+        appConfirmDialog.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('app-confirm-open');
+        pendingConfirmForm = null;
+        pendingConfirmSubmitter = null;
+    }
+
+    function submitPendingConfirmForm() {
+        if (!pendingConfirmForm) {
+            closeActionConfirm();
+            return;
+        }
+
+        const submitter = pendingConfirmSubmitter || pendingConfirmForm.querySelector('button[type="submit"], input[type="submit"]');
+
+        appConfirmSubmit.disabled = true;
+        appConfirmSubmit.classList.add('is-loading');
+
+        if (submitter) {
+            submitter.classList.add('is-loading');
+            submitter.setAttribute('aria-busy', 'true');
+            submitter.disabled = true;
+        }
+
+        pendingConfirmForm.dataset.confirmed = 'true';
+        pendingConfirmForm.submit();
+    }
+
     document.addEventListener('click', function(e) {
         const profileDropdown = document.getElementById('profileDropdown');
         const profileButton = e.target.closest('.profile-button');
@@ -1517,6 +2028,16 @@
         const profileDropdown = document.getElementById('profileDropdown');
         const notificationDropdown = document.getElementById('notificationDropdown');
         const backdrop = document.getElementById('mobileSidebarBackdrop');
+
+        if (appConfirmDialog && appConfirmDialog.classList.contains('show')) {
+            closeActionConfirm();
+            return;
+        }
+
+        if (logoutConfirmDialog && logoutConfirmDialog.classList.contains('show')) {
+            closeLogoutConfirm();
+            return;
+        }
 
         if (profileDropdown) {
             profileDropdown.classList.remove('show');
@@ -1556,6 +2077,72 @@
         }
 
         updateSidebarToggleState();
+
+        applyAppTheme(getPreferredAppTheme());
+
+        if (themeToggleButton) {
+            themeToggleButton.addEventListener('click', function() {
+                const currentTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                applyAppTheme(currentTheme === 'dark' ? 'light' : 'dark');
+            });
+        }
+
+        document.querySelectorAll('form[data-confirm-logout="true"]').forEach(function(form) {
+            form.addEventListener('submit', function(event) {
+                if (form.dataset.logoutConfirmed === 'true') {
+                    return;
+                }
+
+                event.preventDefault();
+                openLogoutConfirm(form);
+            });
+        });
+
+        document.querySelectorAll('[data-logout-cancel]').forEach(function(button) {
+            button.addEventListener('click', closeLogoutConfirm);
+        });
+
+        if (logoutConfirmSubmit) {
+            logoutConfirmSubmit.addEventListener('click', function() {
+                if (!pendingLogoutForm) {
+                    closeLogoutConfirm();
+                    return;
+                }
+
+                logoutConfirmSubmit.disabled = true;
+                logoutConfirmSubmit.classList.add('is-loading');
+                pendingLogoutForm.dataset.logoutConfirmed = 'true';
+                pendingLogoutForm.submit();
+            });
+        }
+
+        document.querySelectorAll('[data-app-toast]').forEach(setupToast);
+
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function(event) {
+                const submitter = event.submitter || null;
+                const needsConfirm = form.dataset.confirmAction === 'true' || submitter?.dataset.confirmAction === 'true';
+
+                if (!needsConfirm) {
+                    return;
+                }
+
+                if (form.dataset.confirmed === 'true') {
+                    return;
+                }
+
+                event.preventDefault();
+                openActionConfirm(form, submitter);
+            });
+        });
+
+        document.querySelectorAll('[data-confirm-cancel]').forEach(function(button) {
+            button.addEventListener('click', closeActionConfirm);
+        });
+
+        if (appConfirmSubmit) {
+            appConfirmSubmit.addEventListener('click', submitPendingConfirmForm);
+        }
 
         document.querySelectorAll('form').forEach(function(form) {
             form.addEventListener('submit', function(event) {

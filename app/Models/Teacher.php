@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\TeacherSalary;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -18,6 +19,7 @@ class Teacher extends Model
     public function leaves(): HasMany { return $this->hasMany(LeaveRequest::class); }
     public function salary(): HasOne { return $this->hasOne(TeacherSalary::class); }
     public function payrollItems(): HasMany { return $this->hasMany(PayrollItem::class); }
+    public function dutySchedules(): BelongsToMany { return $this->belongsToMany(DutySchedule::class, 'duty_schedule_teacher')->withTimestamps(); }
 
     // public function leaveRequests()
     // {

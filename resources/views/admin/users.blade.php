@@ -12,16 +12,10 @@
 
     <div class="ui-page-action-row">
         <a href="{{ route('admin.users.create') }}" class="btn-add-primary">
-            <i class="bi bi-plus-circle-fill"></i>
+            <i class="bi bi-plus-lg"></i>
             <span>Tambah Pengguna</span>
         </a>
     </div>
-
-    @if(session('error'))
-        <div class="alert alert-danger">
-            {{ session('error') }}
-        </div>
-    @endif
 
     <div class="card">
         <div class="card-body">
@@ -53,26 +47,37 @@
                                 @endif
                             </td>
                             <td>
-                                @if($user->status === 'aktif')
-                                    <span class="badge bg-success">Aktif</span>
-                                @else
-                                    <span class="badge bg-secondary">Nonaktif</span>
-                                @endif
+                                <form action="{{ route('admin.users.toggle-status', $user) }}" method="POST" class="m-0" data-no-loading="true">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit" class="status-switch {{ $user->status === 'aktif' ? 'is-active' : '' }}" aria-label="Ubah status pengguna" @disabled(auth()->id() === $user->id)>
+                                        <span></span>
+                                    </button>
+                                </form>
+                                <small class="d-block mt-1 {{ $user->status === 'aktif' ? 'text-success' : 'text-muted' }}">
+                                    {{ $user->status === 'aktif' ? 'Aktif' : 'Nonaktif' }}
+                                </small>
                             </td>
                             <td>
                                 <a href="{{ route('admin.users.edit', $user) }}" class="btn btn-warning btn-sm">
                                     Edit
                                 </a>
 
-                                <form action="{{ route('admin.users.delete', $user) }}" method="POST" style="display:inline;">
+                                <form
+                                    action="{{ route('admin.users.delete', $user) }}"
+                                    method="POST"
+                                    class="d-inline"
+                                    data-confirm-action="true"
+                                    data-confirm-type="danger"
+                                    data-confirm-icon="bi-trash3"
+                                    data-confirm-title="Hapus pengguna?"
+                                    data-confirm-message="Akun {{ $user->name }} akan dihapus dari sistem. Tindakan ini tidak bisa dibatalkan."
+                                    data-confirm-submit="Hapus Pengguna"
+                                >
                                     @csrf
                                     @method('DELETE')
 
-                                    <button 
-                                        type="submit" 
-                                        class="btn btn-danger btn-sm"
-                                        onclick="return confirm('Yakin ingin menghapus pengguna ini?')"
-                                    >
+                                    <button type="submit" class="btn btn-danger btn-sm">
                                         Hapus
                                     </button>
                                 </form>

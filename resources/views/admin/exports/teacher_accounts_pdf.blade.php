@@ -51,7 +51,7 @@
 
     <h2>Data Akun Login Guru</h2>
     <div class="subtitle">
-        Sistem Absensi Guru MI Lantaburo
+        Sistem Absensi Sekolah MI Lantaburo
     </div>
 
     <table>

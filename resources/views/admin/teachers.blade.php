@@ -108,8 +108,9 @@
 
     <div class="ui-toolbar">
         <div class="ui-actions">
-            <a href="{{ route('admin.teachers.create') }}" class="btn btn-primary">
-                <i class="bi bi-plus-circle-fill me-1"></i> Tambah Guru
+            <a href="{{ route('admin.teachers.create') }}" class="btn-add-primary">
+                <i class="bi bi-plus-lg"></i>
+                <span>Tambah Guru</span>
             </a>
 
             <a href="{{ route('admin.teachers.export.excel', request()->query()) }}" class="btn btn-success">
@@ -121,9 +122,8 @@
             </a>
         </div>
 
-        <form action="{{ route('admin.teachers') }}" method="GET" class="d-flex gap-2" style="max-width: 330px; width:100%;">
-            <input type="text" name="keyword" class="form-control" placeholder="Cari nama guru..." value="{{ request('keyword') }}">
-            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+        <form action="{{ route('admin.teachers') }}" method="GET" class="d-flex gap-2" style="max-width: 330px; width:100%;" data-live-search-form>
+            <input type="text" name="keyword" class="form-control" placeholder="Cari nama guru..." value="{{ request('keyword') }}" autocomplete="off" data-live-search-input>
             @if(request('keyword'))
                 <a href="{{ route('admin.teachers') }}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
             @endif
@@ -184,7 +184,16 @@
                                     <div class="d-flex gap-1 flex-wrap">
                                         <a href="{{ route('admin.teachers.edit', $teacher) }}" class="btn btn-warning btn-sm">Edit</a>
 
-                                        <form action="{{ route('admin.teachers.delete', $teacher) }}" method="POST" onsubmit="return confirm('Yakin ingin menghapus data guru ini?')">
+                                        <form
+                                            action="{{ route('admin.teachers.delete', $teacher) }}"
+                                            method="POST"
+                                            data-confirm-action="true"
+                                            data-confirm-type="danger"
+                                            data-confirm-icon="bi-person-x"
+                                            data-confirm-title="Hapus data guru?"
+                                            data-confirm-message="Data guru {{ $teacher->nama_lengkap ?? 'ini' }} beserta akun terkait akan dihapus dari sistem."
+                                            data-confirm-submit="Hapus Guru"
+                                        >
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-danger btn-sm">Hapus</button>
@@ -214,3 +223,26 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('[data-live-search-form]');
+        const input = document.querySelector('[data-live-search-input]');
+
+        if (!form || !input) {
+            return;
+        }
+
+        let timer = null;
+
+        input.addEventListener('input', function() {
+            window.clearTimeout(timer);
+
+            timer = window.setTimeout(function() {
+                form.submit();
+            }, 450);
+        });
+    });
+</script>
+@endpush

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Exports\TeacherAccountsExport;
 use App\Models\AttendanceSession;
-use App\Models\AttendanceSetting;
 use App\Models\SchoolLocation;
 use App\Models\Teacher;
 use App\Models\User;
@@ -219,59 +218,6 @@ class AdminController extends Controller
         return back()->with('success', 'Lokasi sekolah berhasil diperbarui.');
     }
 
-    public function editAttendanceSetting()
-    {
-        $setting = AttendanceSetting::where('status', 'aktif')->first();
-
-        if (!$setting) {
-            $setting = AttendanceSetting::create([
-                'jam_masuk' => '07:00:00',
-                'jam_pulang' => '15:00:00',
-                'toleransi_terlambat' => 15,
-                'batas_check_in_mulai' => '05:00:00',
-                'batas_check_in_selesai' => '10:00:00',
-                'batas_check_out_mulai' => '12:00:00',
-                'batas_check_out_selesai' => '18:00:00',
-                'status' => 'aktif',
-            ]);
-        }
-
-        return view('admin.attendance-setting', compact('setting'));
-    }
-
-    public function updateAttendanceSetting(Request $request)
-    {
-        $request->validate([
-            'jam_masuk' => 'required',
-            'jam_pulang' => 'required',
-            'toleransi_terlambat' => 'required|integer|min:0',
-            'batas_check_in_mulai' => 'required',
-            'batas_check_in_selesai' => 'required',
-            'batas_check_out_mulai' => 'required',
-            'batas_check_out_selesai' => 'required',
-        ]);
-
-        $setting = AttendanceSetting::where('status', 'aktif')->first();
-
-        if (!$setting) {
-            $setting = new AttendanceSetting();
-            $setting->status = 'aktif';
-        }
-
-        $setting->jam_masuk = $request->jam_masuk;
-        $setting->jam_pulang = $request->jam_pulang;
-        $setting->toleransi_terlambat = $request->toleransi_terlambat;
-        $setting->batas_check_in_mulai = $request->batas_check_in_mulai;
-        $setting->batas_check_in_selesai = $request->batas_check_in_selesai;
-        $setting->batas_check_out_mulai = $request->batas_check_out_mulai;
-        $setting->batas_check_out_selesai = $request->batas_check_out_selesai;
-        $setting->save();
-
-        return redirect()
-            ->route('admin.attendance.setting')
-            ->with('success', 'Pengaturan jam absensi berhasil diperbarui.');
-    }
-
     public function users(Request $request)
     {
         // $perPage = $this->resolvePerPage($request);
@@ -360,6 +306,19 @@ class AdminController extends Controller
         $user->delete();
 
         return back()->with('success', 'Data pengguna berhasil dihapus.');
+    }
+
+    public function toggleUserStatus(User $user)
+    {
+        if (auth()->id() === $user->id && $user->status === 'aktif') {
+            return back()->with('error', 'Akun yang sedang digunakan tidak boleh dinonaktifkan.');
+        }
+
+        $user->update([
+            'status' => $user->status === 'aktif' ? 'nonaktif' : 'aktif',
+        ]);
+
+        return back()->with('success', 'Status pengguna berhasil diubah.');
     }
 
     public function exportTeacherAccountsExcel()

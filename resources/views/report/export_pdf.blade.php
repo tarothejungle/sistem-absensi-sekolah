@@ -47,10 +47,10 @@
 </head>
 <body>
 
-    <h2>Laporan Absensi Guru</h2>
+    <h2>Laporan Absensi Sekolah</h2>
 
     <div class="subtitle">
-        Sistem Absensi Guru MI Lantaburo
+        Sistem Absensi Sekolah MI Lantaburo
     </div>
 
     <table>

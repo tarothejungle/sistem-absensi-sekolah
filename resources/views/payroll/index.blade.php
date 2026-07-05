@@ -23,9 +23,18 @@
         </a>
     </div>
 
-    <div class="card border-0 shadow-sm mb-3">
+    <div class="card border-0 shadow-sm mb-3 ui-filter-card">
         <div class="card-body">
-            <form method="POST" action="{{ route('payroll.generate') }}">
+            <form
+                method="POST"
+                action="{{ route('payroll.generate') }}"
+                data-confirm-action="true"
+                data-confirm-type="warning"
+                data-confirm-icon="bi-calculator"
+                data-confirm-title="Hitung ulang penggajian?"
+                data-confirm-message="Periode yang sama akan dibuat ulang berdasarkan data izin/cuti dan pengaturan gaji terbaru."
+                data-confirm-submit="Hitung Ulang"
+            >
                 @csrf
                 <div class="row g-3 align-items-end">
                     <div class="col-md-5">
@@ -48,7 +57,7 @@
                 </div>
             </form>
             <small class="text-muted d-block mt-2">
-                Sistem menghitung potongan dari pengajuan izin/cuti/sakit yang sudah disetujui kepala sekolah dan guru infal. Tugas luar tidak ikut dipotong.
+                Sistem menghitung potongan dari pengajuan izin/cuti/sakit yang sudah disetujui dan dari status alfa/tidak hadir. Potongan karena guru infal masuk ke tambahan guru pengganti, sedangkan potongan alfa masuk kas sekolah. Tugas luar tidak ikut dipotong.
             </small>
         </div>
     </div>

@@ -14,6 +14,8 @@ use App\Http\Controllers\InfalReportController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\HolidaySettingController;
+use App\Http\Controllers\DutyScheduleController;
 
 Route::get('/', fn () => redirect()->route('login'));
 
@@ -84,11 +86,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/admin/users', [AdminController::class, 'storeUser'])->name('admin.users.store');
         Route::get('/admin/users/{user}/edit', [AdminController::class, 'editUser'])->name('admin.users.edit');
         Route::put('/admin/users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
+        Route::patch('/admin/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus'])->name('admin.users.toggle-status');
         Route::delete('/admin/users/{user}', [AdminController::class, 'deleteUser'])->name('admin.users.delete');
 
-        Route::get('/admin/attendance-setting', [AdminController::class, 'editAttendanceSetting'])->name('admin.attendance.setting');
-        Route::post('/admin/attendance-setting', [AdminController::class, 'updateAttendanceSetting'])->name('admin.attendance.setting.update');
-        
         Route::get('/admin/location', [AdminController::class, 'editLocation'])->name('admin.location');
         Route::post('/admin/location', [AdminController::class, 'updateLocation'])->name('admin.location.update');
 
@@ -107,8 +107,33 @@ Route::middleware('auth')->group(function () {
         Route::put('/admin/attendance-sessions/{session}', [AttendanceSessionController::class, 'update'])
             ->name('admin.attendance-sessions.update');
 
+        Route::patch('/admin/attendance-sessions/{session}/toggle', [AttendanceSessionController::class, 'toggle'])
+            ->name('admin.attendance-sessions.toggle');
+
         Route::delete('/admin/attendance-sessions/{session}', [AttendanceSessionController::class, 'destroy'])
             ->name('admin.attendance-sessions.destroy');
+
+        Route::get('/admin/holidays', [HolidaySettingController::class, 'index'])
+            ->name('admin.holidays.index');
+        Route::post('/admin/holidays', [HolidaySettingController::class, 'store'])
+            ->name('admin.holidays.store');
+        Route::put('/admin/holidays/{holiday}', [HolidaySettingController::class, 'update'])
+            ->name('admin.holidays.update');
+        Route::patch('/admin/holidays/{holiday}/toggle', [HolidaySettingController::class, 'toggle'])
+            ->name('admin.holidays.toggle');
+        Route::delete('/admin/holidays/{holiday}', [HolidaySettingController::class, 'destroy'])
+            ->name('admin.holidays.destroy');
+
+        Route::get('/admin/duty-schedules', [DutyScheduleController::class, 'index'])
+            ->name('admin.duty-schedules.index');
+        Route::post('/admin/duty-schedules', [DutyScheduleController::class, 'store'])
+            ->name('admin.duty-schedules.store');
+        Route::put('/admin/duty-schedules/{dutySchedule}', [DutyScheduleController::class, 'update'])
+            ->name('admin.duty-schedules.update');
+        Route::patch('/admin/duty-schedules/{dutySchedule}/toggle', [DutyScheduleController::class, 'toggle'])
+            ->name('admin.duty-schedules.toggle');
+        Route::delete('/admin/duty-schedules/{dutySchedule}', [DutyScheduleController::class, 'destroy'])
+            ->name('admin.duty-schedules.destroy');
     });
 
 

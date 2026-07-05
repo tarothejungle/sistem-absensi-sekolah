@@ -12,22 +12,10 @@
 
     <div class="ui-page-action-row">
         <a href="{{ route('admin.attendance-sessions.create') }}" class="btn-add-primary">
-            <i class="bi bi-plus-circle-fill"></i>
+            <i class="bi bi-plus-lg"></i>
             <span>Tambah Sesi</span>
         </a>
     </div>
-
-    @if(session('success'))
-        <div class="alert alert-success">
-            {{ session('success') }}
-        </div>
-    @endif
-
-    @if(session('error'))
-        <div class="alert alert-danger">
-            {{ session('error') }}
-        </div>
-    @endif
 
     <div class="card">
         <div class="card-body">
@@ -64,26 +52,37 @@
                                 {{ substr($session->batas_check_out_selesai, 0, 5) }}
                             </td>
                             <td>
-                                @if($session->status === 'aktif')
-                                    <span class="badge bg-success">Aktif</span>
-                                @else
-                                    <span class="badge bg-secondary">Nonaktif</span>
-                                @endif
+                                <form action="{{ route('admin.attendance-sessions.toggle', $session) }}" method="POST" class="m-0" data-no-loading="true">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit" class="status-switch {{ $session->status === 'aktif' ? 'is-active' : '' }}" aria-label="Ubah status sesi absensi">
+                                        <span></span>
+                                    </button>
+                                </form>
+                                <small class="d-block mt-1 {{ $session->status === 'aktif' ? 'text-success' : 'text-muted' }}">
+                                    {{ $session->status === 'aktif' ? 'Aktif' : 'Nonaktif' }}
+                                </small>
                             </td>
                             <td>
                                 <a href="{{ route('admin.attendance-sessions.edit', $session) }}" class="btn btn-warning btn-sm">
                                     Edit
                                 </a>
 
-                                <form action="{{ route('admin.attendance-sessions.destroy', $session) }}" method="POST" style="display:inline;">
+                                <form
+                                    action="{{ route('admin.attendance-sessions.destroy', $session) }}"
+                                    method="POST"
+                                    class="d-inline"
+                                    data-confirm-action="true"
+                                    data-confirm-type="danger"
+                                    data-confirm-icon="bi-clock-history"
+                                    data-confirm-title="Hapus sesi absensi?"
+                                    data-confirm-message="Sesi {{ $session->nama_sesi }} akan dihapus jika belum digunakan oleh data guru."
+                                    data-confirm-submit="Hapus Sesi"
+                                >
                                     @csrf
                                     @method('DELETE')
 
-                                    <button 
-                                        type="submit" 
-                                        class="btn btn-danger btn-sm"
-                                        onclick="return confirm('Yakin ingin menghapus sesi ini?')"
-                                    >
+                                    <button type="submit" class="btn btn-danger btn-sm">
                                         Hapus
                                     </button>
                                 </form>

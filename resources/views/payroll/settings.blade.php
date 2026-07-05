@@ -13,13 +13,14 @@
     <form action="{{ route('payroll.settings.bulk-update') }}" method="POST">
         @csrf
 
-        <div class="card">
+        <div class="card ui-form-card">
             <div class="card-body">
 
                 <div class="alert alert-info">
                     Notes: Potongan dihitung otomatis berdasarkan gaji pokok.
                     Guru dengan gaji Rp1.000.000 atau lebih mendapatkan potongan Rp30.000 per ketidakhadiran,
                     sedangkan guru dengan gaji di bawah Rp1.000.000 mendapatkan potongan Rp20.000 per ketidakhadiran.
+                    Potongan alfa/tidak hadir dicatat sebagai kas sekolah.
                 </div>
 
                 <div class="d-flex gap-2 justify-content-end mb-4 flex-wrap">
@@ -33,7 +34,8 @@
                 </div>
 
                 @if ($errors->any())
-                    <div class="alert alert-danger">
+                    <div class="ui-error-summary">
+                        <strong><i class="bi bi-exclamation-triangle"></i> Pengaturan gaji belum bisa disimpan</strong>
                         <ul class="mb-0">
                             @foreach ($errors->all() as $error)
                                 <li>{{ $error }}</li>

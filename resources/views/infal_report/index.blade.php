@@ -11,18 +11,6 @@
 
 <div class="container-fluid">
 
-    @if(session('error'))
-        <div class="alert alert-danger">
-            {{ session('error') }}
-        </div>
-    @endif
-
-    @if(session('success'))
-        <div class="alert alert-success">
-            {{ session('success') }}
-        </div>
-    @endif
-
     {{-- Header Halaman --}}
     <div class="ui-page-hero">
         <div>
@@ -44,11 +32,11 @@
     </div>
 
     {{-- Filter --}}
-    <div class="card border-0 shadow-sm mb-3">
+    <div class="card border-0 shadow-sm mb-3 ui-filter-card">
         <div class="card-body">
             <form method="GET">
                 <div class="row g-3 align-items-end">
-                    <div class="col-md-5">
+                    <div class="col-md-5 ui-field">
                         <label class="form-label fw-semibold">Tanggal Mulai</label>
                         <input
                             type="date"
@@ -58,7 +46,7 @@
                         >
                     </div>
 
-                    <div class="col-md-5">
+                    <div class="col-md-5 ui-field">
                         <label class="form-label fw-semibold">Tanggal Selesai</label>
                         <input
                             type="date"
@@ -69,7 +57,7 @@
                     </div>
 
                     <div class="col-md-2">
-                        <div class="d-flex gap-2 justify-content-md-end">
+                        <div class="ui-filter-actions">
                             <button type="submit" class="btn btn-primary">
                                 Filter
                             </button>
@@ -142,7 +130,6 @@
             </div>
 
             <div class="table-footer-row">
-                @include('partials.per-page-selector', ['paginator' => $items])
                 <div class="pagination-wrapper">
                     {{ $items->links() }}
                 </div>

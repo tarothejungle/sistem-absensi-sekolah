@@ -17,7 +17,7 @@
     @if (in_array(auth()->user()->role, ['guru', 'bendahara']))
         <div class="ui-page-action-row">
             <a href="{{ route('leave.create') }}" class="btn-add-primary">
-                <i class="bi bi-plus-circle-fill"></i>
+                <i class="bi bi-plus-lg"></i>
                 <span>Ajukan Izin/Cuti</span>
             </a>
         </div>
@@ -239,7 +239,12 @@
                                     <form 
                                         action="{{ route('leave.destroy', $leave) }}" 
                                         method="POST"
-                                        onsubmit="return confirm('Yakin ingin menghapus pengajuan ini?')"
+                                        data-confirm-action="true"
+                                        data-confirm-type="danger"
+                                        data-confirm-icon="bi-trash3"
+                                        data-confirm-title="Hapus pengajuan?"
+                                        data-confirm-message="Pengajuan izin/cuti ini akan dihapus dari daftar Anda."
+                                        data-confirm-submit="Hapus Pengajuan"
                                     >
                                         @csrf
                                         @method('DELETE')
@@ -265,7 +270,12 @@
                                     <form 
                                         action="{{ route('leave.infal.approve', $leave) }}" 
                                         method="POST"
-                                        onsubmit="return confirm('Setujui menjadi guru pengganti?')"
+                                        data-confirm-action="true"
+                                        data-confirm-type="success"
+                                        data-confirm-icon="bi-check2-circle"
+                                        data-confirm-title="Setujui sebagai guru pengganti?"
+                                        data-confirm-message="Anda akan tercatat menyetujui tugas sebagai guru pengganti untuk pengajuan ini."
+                                        data-confirm-submit="Setujui"
                                     >
                                         @csrf
                                         @method('PATCH')
@@ -278,7 +288,12 @@
                                     <form 
                                         action="{{ route('leave.infal.reject', $leave) }}" 
                                         method="POST"
-                                        onsubmit="return confirm('Tolak menjadi guru pengganti?')"
+                                        data-confirm-action="true"
+                                        data-confirm-type="danger"
+                                        data-confirm-icon="bi-x-circle"
+                                        data-confirm-title="Tolak sebagai guru pengganti?"
+                                        data-confirm-message="Status Anda akan dicatat menolak tugas sebagai guru pengganti untuk pengajuan ini."
+                                        data-confirm-submit="Tolak"
                                     >
                                         @csrf
                                         @method('PATCH')
@@ -318,7 +333,12 @@
                                         <button
                                             type="submit"
                                             class="btn btn-success btn-sm"
-                                            onclick="return confirm('Yakin ingin menyetujui izin ini?')"
+                                            data-confirm-action="true"
+                                            data-confirm-type="success"
+                                            data-confirm-icon="bi-check2-circle"
+                                            data-confirm-title="Setujui izin/cuti?"
+                                            data-confirm-message="Pengajuan ini akan disetujui dan guru terkait akan menerima status terbaru."
+                                            data-confirm-submit="Setujui"
                                         >
                                             Setujui
                                         </button>
@@ -338,7 +358,12 @@
                                         <button
                                             type="submit"
                                             class="btn btn-danger btn-sm"
-                                            onclick="return confirm('Yakin ingin menolak izin ini?')"
+                                            data-confirm-action="true"
+                                            data-confirm-type="danger"
+                                            data-confirm-icon="bi-x-circle"
+                                            data-confirm-title="Tolak izin/cuti?"
+                                            data-confirm-message="Pengajuan ini akan ditolak. Pastikan catatan penolakan sudah sesuai jika diperlukan."
+                                            data-confirm-submit="Tolak"
                                         >
                                             Tolak
                                         </button>
@@ -366,7 +391,6 @@
     </div>
 
         <!-- <div class="table-footer-row">
-            @include('partials.per-page-selector', ['paginator' => $leaves])
                 <div class="pagination-wrapper">
                     {{ $leaves->links() }}
                 </div>

@@ -59,6 +59,15 @@ class AttendanceSessionController extends Controller
         return back()->with('success', 'Sesi absensi berhasil dihapus.');
     }
 
+    public function toggle(AttendanceSession $session)
+    {
+        $session->update([
+            'status' => $session->status === 'aktif' ? 'nonaktif' : 'aktif',
+        ]);
+
+        return back()->with('success', 'Status sesi absensi berhasil diubah.');
+    }
+
     private function rules(): array
     {
         return [

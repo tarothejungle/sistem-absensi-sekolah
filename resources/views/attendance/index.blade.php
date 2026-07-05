@@ -4,8 +4,8 @@
 <div class="container-fluid">
     <div class="dashboard-hero d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h2>Absensi Guru</h2>
-            <p>Lakukan check-in dan check-out sesuai sesi serta jadwal hari mengajar.</p>
+            <h2>Absensi Sekolah</h2>
+            <p>Lakukan check-in dan check-out sesuai sesi, jadwal mengajar, atau jadwal piket yang berlaku.</p>
         </div>
 
         <div class="hero-action ms-auto">
@@ -160,7 +160,6 @@
                         </table>
                     </div>
 
-                    @include('partials.per-page-selector', ['paginator' => $attendances])
                 </div>
             </div>
         </div>

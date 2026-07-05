@@ -27,14 +27,26 @@
                 ->implode('');
         @endphp
 
-        <div class="dashboard-hero d-flex justify-content-between align-items-center flex-wrap gap-3">
-            <div>
-                <h2>Dashboard</h2>
-                <p>Ringkasan profil dan aktivitas absensi akun Anda.</p>
+        <div class="dashboard-hero dashboard-welcome-card">
+            <div class="dashboard-hero-main">
+                <div class="dashboard-hero-icon">
+                    <i class="bi bi-building-check"></i>
+                </div>
+                <div>
+                    <h2>Dashboard</h2>
+                    <p>Ringkasan profil dan aktivitas absensi akun Anda.</p>
+                    <div class="dashboard-meta-pills">
+                        <span><i class="bi bi-calendar3"></i> {{ now()->translatedFormat('d F Y') }}</span>
+                        <span><i class="bi bi-clock"></i> {{ now()->format('H:i') }} WIB</span>
+                    </div>
+                </div>
             </div>
-            <div class="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill" style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.16);">
-                <i class="bi bi-person-check-fill"></i>
-                <span class="fw-bold">{{ ucwords(str_replace('_', ' ', $role)) }}</span>
+            <div class="dashboard-hero-summary">
+                <div class="dashboard-summary-title">Aktivitas Hari Ini</div>
+                <div class="dashboard-summary-row">
+                    <span>Profil</span>
+                    <strong>{{ $teacher?->nama_lengkap ? 'Lengkap' : 'Perlu dicek' }}</strong>
+                </div>
             </div>
         </div>
 
@@ -58,7 +70,16 @@
                             </a>
 
                             @if(auth()->user()->profile_photo)
-                                <form action="{{ route('profile.photo.delete') }}" method="POST" onsubmit="return confirm('Yakin ingin menghapus foto profil?')">
+                                <form
+                                    action="{{ route('profile.photo.delete') }}"
+                                    method="POST"
+                                    data-confirm-action="true"
+                                    data-confirm-type="danger"
+                                    data-confirm-icon="bi-image"
+                                    data-confirm-title="Hapus foto profil?"
+                                    data-confirm-message="Foto profil akun Anda akan dihapus dan avatar inisial akan digunakan kembali."
+                                    data-confirm-submit="Hapus Foto"
+                                >
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="btn btn-danger w-100">
@@ -171,14 +192,30 @@
         @endif
 
     @else
-        <div class="dashboard-hero d-flex justify-content-between align-items-center flex-wrap gap-3">
-            <div>
-                <h2>Dashboard</h2>
-                <p>Monitoring ringkas kehadiran guru dan aktivitas sistem hari ini.</p>
+        <div class="dashboard-hero dashboard-welcome-card">
+            <div class="dashboard-hero-main">
+                <div class="dashboard-hero-icon">
+                    <i class="bi bi-building-check"></i>
+                </div>
+                <div>
+                    <h2>Dashboard</h2>
+                    <p>Monitoring ringkas kehadiran guru dan aktivitas sistem hari ini.</p>
+                    <div class="dashboard-meta-pills">
+                        <span><i class="bi bi-calendar3"></i> {{ now()->translatedFormat('d F Y') }}</span>
+                        <span><i class="bi bi-clock"></i> {{ now()->format('H:i') }} WIB</span>
+                    </div>
+                </div>
             </div>
-            <div class="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill" style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.16);">
-                <i class="bi bi-calendar3"></i>
-                <span class="fw-bold">{{ now()->translatedFormat('d F Y') }}</span>
+            <div class="dashboard-hero-summary">
+                <div class="dashboard-summary-title">Ringkasan Hari Ini</div>
+                <div class="dashboard-summary-row">
+                    <span>Total Guru</span>
+                    <strong>{{ $totalGuru ?? 0 }}</strong>
+                </div>
+                <div class="dashboard-summary-row">
+                    <span>Hadir Lengkap</span>
+                    <strong>{{ $hadirHariIni ?? 0 }}</strong>
+                </div>
             </div>
         </div>
 

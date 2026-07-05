@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\AttendanceSession;
+use App\Models\DutySchedule;
+use App\Models\HolidaySetting;
 use App\Models\SchoolLocation;
 use App\Models\WorkSchedule;
 use App\Services\FaceVerificationService;
@@ -49,9 +51,10 @@ class AttendanceController extends Controller
         $sessions = collect();
         $activeSession = null;
         $scheduleMessage = null;
+        $attendanceBlockMessage = $this->attendanceBlockMessage($teacher, $today, $todaySchedule, $hasAnySchedule);
 
-        if ($hasAnySchedule && !$todaySchedule) {
-            $scheduleMessage = 'Hari ini belum termasuk jadwal absensi untuk akun Anda. Silakan hubungi admin apabila jadwal mengajar belum sesuai.';
+        if ($attendanceBlockMessage) {
+            $scheduleMessage = $attendanceBlockMessage;
         } else {
             $sessions = $this->getTeacherSessions($teacher)
                 ->map(function ($session) use ($teacher, $today, $nowTime) {
@@ -159,6 +162,38 @@ class AttendanceController extends Controller
             ->first();
     }
 
+    private function attendanceBlockMessage($teacher, string $date, ?WorkSchedule $schedule, bool $hasAnySchedule): ?string
+    {
+        $isOnDuty = $this->isTeacherOnActiveDuty($teacher, $date);
+
+        if ($this->isActiveHoliday($date) && !$isOnDuty) {
+            return 'Hari ini ditetapkan sebagai hari libur. Absensi hanya dibuka untuk guru/karyawan yang masuk jadwal piket aktif.';
+        }
+
+        if ($hasAnySchedule && !$schedule && !$isOnDuty) {
+            return 'Hari ini belum termasuk jadwal absensi untuk akun Anda. Silakan hubungi admin apabila jadwal mengajar belum sesuai.';
+        }
+
+        return null;
+    }
+
+    private function isActiveHoliday(string $date): bool
+    {
+        return HolidaySetting::active()
+            ->whereDate('tanggal', $date)
+            ->exists();
+    }
+
+    private function isTeacherOnActiveDuty($teacher, string $date): bool
+    {
+        return DutySchedule::active()
+            ->whereDate('tanggal', $date)
+            ->whereHas('teachers', function ($query) use ($teacher) {
+                $query->where('teachers.id', $teacher->id);
+            })
+            ->exists();
+    }
+
     public function checkIn(
         Request $request,
         GeoFenceService $geo,
@@ -180,9 +215,11 @@ class AttendanceController extends Controller
 
         $schedule = $this->todaySchedule($teacher);
         $hasAnySchedule = WorkSchedule::where('teacher_id', $teacher->id)->exists();
+        $today = now('Asia/Jakarta')->toDateString();
+        $attendanceBlockMessage = $this->attendanceBlockMessage($teacher, $today, $schedule, $hasAnySchedule);
 
-        if ($hasAnySchedule && !$schedule) {
-            return back()->with('error', 'Hari ini tidak termasuk jadwal absensi Anda.');
+        if ($attendanceBlockMessage) {
+            return back()->with('error', $attendanceBlockMessage);
         }
 
         $session = $this->getTeacherSessions($teacher)
@@ -324,9 +361,11 @@ class AttendanceController extends Controller
 
         $schedule = $this->todaySchedule($teacher);
         $hasAnySchedule = WorkSchedule::where('teacher_id', $teacher->id)->exists();
+        $today = now('Asia/Jakarta')->toDateString();
+        $attendanceBlockMessage = $this->attendanceBlockMessage($teacher, $today, $schedule, $hasAnySchedule);
 
-        if ($hasAnySchedule && !$schedule) {
-            return back()->with('error', 'Hari ini tidak termasuk jadwal absensi Anda.');
+        if ($attendanceBlockMessage) {
+            return back()->with('error', $attendanceBlockMessage);
         }
 
         $session = $this->getTeacherSessions($teacher)
