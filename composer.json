@@ -3,7 +3,7 @@
     "type": "project",
     "description": "Sistem absensi sekolah berbasis Laravel untuk kehadiran guru/karyawan, izin/cuti, laporan, jadwal piket, dan penggajian.",
     "keywords": ["laravel", "absensi", "sekolah", "kehadiran"],
-    "license": "MIT",
+    "license": "GPL-3.0-or-later",
     
     "require": {
         "php": "^8.2",

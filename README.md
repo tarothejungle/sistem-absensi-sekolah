@@ -30,6 +30,9 @@ php artisan serve
 
 ## Tangkapan Layar
 
+<details>
+<summary>Klik untuk melihat tangkapan layar</summary>
+
 **Login**
 
 ![Login](docs/screenshots/login.png)
@@ -50,6 +53,8 @@ php artisan serve
 
 ![Penggajian](docs/screenshots/penggajian.png)
 
+</details>
+
 ## Catatan Face Recognition
 
 Versi saat ini memakai face capture sederhana sebagai bukti foto absensi. Untuk face recognition berbasis embedding wajah, pendekatan yang disarankan adalah service Python self-hosted yang menerima foto dari Laravel, membuat embedding, lalu mencocokkannya dengan data wajah yang telah didaftarkan.
@@ -57,3 +62,7 @@ Versi saat ini memakai face capture sederhana sebagai bukti foto absensi. Untuk 
 ## Catatan Repository
 
 Repository ini dipublikasikan sebagai referensi, namun tidak sepenuhnya open source. Sebagian berkas rahasia serta konfigurasi dan dokumentasi internal sengaja tidak disertakan, sehingga sebagian penyesuaian untuk lingkungan produksi perlu dieksplorasi dan dikonfigurasi sendiri.
+
+## Lisensi
+
+Dirilis di bawah lisensi [GNU General Public License v3.0](LICENSE). Anda bebas menggunakan, mempelajari, memodifikasi, dan mendistribusikan ulang perangkat lunak ini selama karya turunan tetap dirilis di bawah lisensi yang sama.
