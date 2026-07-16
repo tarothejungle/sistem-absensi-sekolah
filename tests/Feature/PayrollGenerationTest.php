@@ -166,13 +166,16 @@ class PayrollGenerationTest extends TestCase
 
     private function createUser(string $role, string $name = 'User Payroll Test'): User
     {
-        return User::create([
+        $user = User::create([
             'nip' => uniqid('nip_', true),
             'name' => $name . ' ' . uniqid(),
             'email' => uniqid('payroll_', true) . '@example.test',
             'password' => Hash::make('password'),
-            'role' => $role,
-            'status' => 'aktif',
         ]);
+
+        // role & status tidak fillable — set eksplisit (defense-in-depth).
+        $user->forceFill(['role' => $role, 'status' => 'aktif'])->save();
+
+        return $user;
     }
 }

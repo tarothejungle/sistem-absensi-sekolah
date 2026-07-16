@@ -7,6 +7,7 @@ use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use App\Support\ExcelCell;
 
 class InfalReportExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize
 {
@@ -56,11 +57,11 @@ class InfalReportExport implements FromCollection, WithHeadings, WithMapping, Sh
     {
         return [
             ++$this->rowNumber,
-            $item->tanggal_mulai->format('d/m/Y') . ' - ' . $item->tanggal_selesai->format('d/m/Y'),
-            $item->teacher->nama_lengkap ?? '-',
-            $item->infalTeacher->nama_lengkap ?? '-',
-            ucfirst($item->jenis_pengajuan),
-            $item->alasan,
+            ExcelCell::escape($item->tanggalLabel()),
+            ExcelCell::escape($item->teacher->nama_lengkap ?? '-'),
+            ExcelCell::escape($item->infalTeacher->nama_lengkap ?? '-'),
+            ExcelCell::escape(ucfirst($item->jenis_pengajuan)),
+            ExcelCell::escape($item->alasan),
             'Disetujui',
             'Disetujui',
         ];

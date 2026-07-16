@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Sistem Absensi Sekolah</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     {{-- Bootstrap --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -37,7 +38,7 @@
 
         .topbar {
             height: 64px;
-            background: #001362;
+            background: #202124;
             color: white;
             display: flex;
             align-items: center;
@@ -282,7 +283,7 @@
         }
 
         .sidebar-link.active {
-            background: #001362;
+            background: #202124;
             color: white;
         }
 
@@ -726,8 +727,8 @@
 
         .btn-primary,
         .btn-add-primary {
-            background: var(--app-primary) !important;
-            border-color: var(--app-primary) !important;
+            background: #001362 !important;
+            border-color: #001362 !important;
         }
 
         .btn-success { background: #138a57 !important; border-color: #138a57 !important; }
@@ -1016,8 +1017,8 @@
         .btn.btn-primary {
             min-height: 44px;
             padding: 10px 18px !important;
-            background: var(--app-primary) !important;
-            border-color: var(--app-primary) !important;
+            background: #001362 !important;
+            border-color: #001362 !important;
             box-shadow: 0 12px 24px rgba(0, 19, 98, .20) !important;
         }
 
@@ -1130,7 +1131,7 @@
     @stack('styles')
 
     {{-- Final UI polish override --}}
-    <link href="{{ asset('css/absensi-ui-final.css') }}?v=20260705-sidebar-search-report-fix" rel="stylesheet">
+    <link href="{{ asset('css/absensi-ui-final.css') }}?v=20260712-rollback" rel="stylesheet">
 </head>
 <body class="app-shell">
 
@@ -1144,7 +1145,7 @@
         request()->routeIs('dashboard') => 'Dashboard',
         request()->routeIs('attendance.*') => 'Absensi',
         request()->routeIs('leave.*') => in_array($user->role, ['kepala_sekolah', 'super_admin']) ? 'Approval Izin/Cuti' : 'Pengajuan Izin/Cuti',
-        request()->routeIs('admin.users*') => 'Data Pengguna',
+        request()->routeIs('admin.users*') => 'Data Admin',
         request()->routeIs('admin.teachers*') => 'Data Guru',
         request()->routeIs('admin.location*') => 'Setting Lokasi Sekolah',
         request()->routeIs('admin.attendance-sessions*') => 'Setting Sesi',
@@ -1236,7 +1237,7 @@
             'url' => route('admin.users'),
             'active' => request()->routeIs('admin.users*'),
             'icon' => 'bi-people',
-            'label' => 'Data Pengguna',
+            'label' => 'Data Admin',
         ];
         $mainSidebarItems[] = [
             'url' => route('admin.teachers'),
@@ -1373,6 +1374,12 @@
             'items' => $reportSidebarItems,
         ],
     ], fn ($group) => count($group['items']) > 0));
+
+    $mobileNavItems = collect($sidebarGroups)
+        ->flatMap(fn ($group) => $group['items'])
+        ->unique('url')
+        ->values()
+        ->all();
 @endphp
 
 {{-- TOPBAR --}}
@@ -1555,9 +1562,9 @@
     </div>
 </aside>
 
-<nav class="mobile-bottom-nav" aria-label="Navigasi cepat">
-    @foreach($mobileNavItems as $item)
-        <a href="{{ $item['url'] }}" class="mobile-bottom-link {{ $item['active'] ? 'active' : '' }}">
+<nav class="mobile-bottom-nav" aria-label="Navigasi cepat" data-mobile-bottom-nav>
+    @foreach($mobileNavItems as $index => $item)
+        <a href="{{ $item['url'] }}" class="mobile-bottom-link {{ $item['active'] ? 'active' : '' }}" data-mobile-bottom-link data-mobile-nav-index="{{ $index }}">
             <i class="bi {{ $item['icon'] }}"></i>
             <span>{{ $item['label'] }}</span>
         </a>
@@ -2149,22 +2156,65 @@
                 if (form.dataset.noLoading === 'true') {
                     return;
                 }
-
+ 
                 if (event.defaultPrevented) {
                     return;
                 }
-
+ 
                 const submitter = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
-
+ 
                 if (!submitter || submitter.disabled) {
                     return;
                 }
-
-                submitter.classList.add('is-loading');
-                submitter.setAttribute('aria-busy', 'true');
-                submitter.disabled = true;
+ 
+                // Tunda ke task berikutnya agar handler lain yang memanggil
+                // preventDefault() (mis. form absensi dengan GPS/kamera) tetap
+                // dihormati. Tanpa ini, tombol bisa ter-disable lalu handler
+                // absensi batal submit => tombol "muter-muter" selamanya.
+                window.setTimeout(function() {
+                    if (event.defaultPrevented || submitter.disabled) {
+                        return;
+                    }
+ 
+                    submitter.classList.add('is-loading');
+                    submitter.setAttribute('aria-busy', 'true');
+                    submitter.disabled = true;
+                }, 0);
             });
         });
+
+        const mobileBottomNav = document.querySelector('[data-mobile-bottom-nav]');
+        const mobileBottomLinks = document.querySelectorAll('[data-mobile-bottom-link]');
+        const mobileBottomNavStorageKey = 'mobile_bottom_nav_scroll_left';
+        const mobileBottomNavActiveStorageKey = 'mobile_bottom_nav_active_index';
+
+        if (mobileBottomNav) {
+            const savedScrollLeft = window.sessionStorage.getItem(mobileBottomNavStorageKey);
+            const savedActiveIndex = window.sessionStorage.getItem(mobileBottomNavActiveStorageKey);
+
+            if (savedScrollLeft !== null) {
+                mobileBottomNav.scrollLeft = Number(savedScrollLeft);
+            }
+
+            if (savedActiveIndex !== null && !document.querySelector('[data-mobile-bottom-link].active')) {
+                const lastActiveLink = document.querySelector('[data-mobile-nav-index="' + savedActiveIndex + '"]');
+
+                if (lastActiveLink) {
+                    lastActiveLink.classList.add('active');
+                }
+            }
+
+            mobileBottomNav.addEventListener('scroll', function() {
+                window.sessionStorage.setItem(mobileBottomNavStorageKey, String(mobileBottomNav.scrollLeft));
+            }, { passive: true });
+
+            mobileBottomLinks.forEach(function(link) {
+                link.addEventListener('click', function() {
+                    window.sessionStorage.setItem(mobileBottomNavStorageKey, String(mobileBottomNav.scrollLeft));
+                    window.sessionStorage.setItem(mobileBottomNavActiveStorageKey, link.dataset.mobileNavIndex || '0');
+                });
+            });
+        }
     });
 </script>
 
@@ -2173,7 +2223,7 @@
         const wrapper = button.closest('.password-wrapper');
         const input = wrapper.querySelector('input');
         const icon = button.querySelector('i');
-
+ 
         if (input.type === 'password') {
             input.type = 'text';
             icon.classList.remove('bi-eye');
@@ -2184,6 +2234,122 @@
             icon.classList.add('bi-eye');
         }
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('[data-bulk-selection-form]').forEach(function(container) {
+            const checkAll = container.querySelector('[data-check-all]');
+            const rowChecks = Array.from(container.querySelectorAll('[data-row-check]'));
+            const bulkDeleteFormId = container.dataset.bulkDeleteTarget || null;
+            const bulkDeleteButtons = bulkDeleteFormId
+                ? Array.from(document.querySelectorAll('[data-bulk-delete-button][form="' + bulkDeleteFormId + '"]'))
+                : Array.from(document.querySelectorAll('[data-bulk-delete-button]'));
+
+            if (!checkAll || rowChecks.length === 0 || bulkDeleteButtons.length === 0) {
+                return;
+            }
+
+            const syncBulkSelectionState = function() {
+                const enabledRowChecks = rowChecks.filter(function(checkbox) {
+                    return !checkbox.disabled;
+                });
+                const checkedRowChecks = enabledRowChecks.filter(function(checkbox) {
+                    return checkbox.checked;
+                });
+                const hasSelection = checkedRowChecks.length > 0;
+                const isAllChecked = enabledRowChecks.length > 0 && checkedRowChecks.length === enabledRowChecks.length;
+
+                checkAll.checked = isAllChecked;
+                checkAll.indeterminate = checkedRowChecks.length > 0 && !isAllChecked;
+
+                bulkDeleteButtons.forEach(function(button) {
+                    button.disabled = !hasSelection;
+                });
+            };
+
+            checkAll.addEventListener('change', function() {
+                rowChecks.forEach(function(checkbox) {
+                    if (!checkbox.disabled) {
+                        checkbox.checked = checkAll.checked;
+                    }
+                });
+
+                syncBulkSelectionState();
+            });
+
+            rowChecks.forEach(function(checkbox) {
+                checkbox.addEventListener('change', syncBulkSelectionState);
+            });
+
+            bulkDeleteButtons.forEach(function(button) {
+                button.addEventListener('click', function(event) {
+                    const targetForm = button.closest('form');
+
+                    if (!targetForm) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    targetForm.querySelectorAll('input[data-bulk-clone="true"]').forEach(function(input) {
+                        input.remove();
+                    });
+
+                    rowChecks.filter(function(checkbox) {
+                        return checkbox.checked && !checkbox.disabled;
+                    }).forEach(function(checkbox) {
+                        const clone = document.createElement('input');
+                        clone.type = 'hidden';
+                        clone.name = checkbox.name;
+                        clone.value = checkbox.value;
+                        clone.setAttribute('data-bulk-clone', 'true');
+                        targetForm.appendChild(clone);
+                    });
+
+                    if (targetForm.querySelectorAll('input[data-bulk-clone="true"]').length === 0) {
+                        event.stopPropagation();
+                        return;
+                    }
+
+                    targetForm.requestSubmit(button);
+                });
+            });
+
+            syncBulkSelectionState();
+        });
+    });
+</script>
+
+<script>
+    (function() {
+        var TIMEOUT_MS = 5 * 60 * 1000;
+        var idleTimer = null;
+
+        function forceLogout() {
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ route("logout") }}';
+
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_token';
+            csrfInput.value = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            form.appendChild(csrfInput);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function resetTimer() {
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(forceLogout, TIMEOUT_MS);
+        }
+
+        var events = ['mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+        events.forEach(function(evt) {
+            document.addEventListener(evt, resetTimer, { passive: true });
+        });
+
+        resetTimer();
+    })();
 </script>
 
 @stack('scripts')

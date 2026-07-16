@@ -77,9 +77,7 @@
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td>
-                        {{ $item->tanggal_mulai->format('d/m/Y') }}
-                        -
-                        {{ $item->tanggal_selesai->format('d/m/Y') }}
+                        {{ $item->tanggalLabel() }}
                     </td>
                     <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
                     <td>{{ $item->infalTeacher->nama_lengkap ?? '-' }}</td>

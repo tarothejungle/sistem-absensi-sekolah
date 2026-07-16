@@ -171,13 +171,16 @@ class LeaveApprovalTest extends TestCase
 
     private function createUser(string $role): User
     {
-        return User::create([
+        $user = User::create([
             'nip' => uniqid('nip_', true),
             'name' => 'User Test ' . uniqid(),
             'email' => uniqid('user_', true) . '@example.test',
             'password' => Hash::make('password'),
-            'role' => $role,
-            'status' => 'aktif',
         ]);
+
+        // role & status tidak fillable — set eksplisit (defense-in-depth).
+        $user->forceFill(['role' => $role, 'status' => 'aktif'])->save();
+
+        return $user;
     }
 }

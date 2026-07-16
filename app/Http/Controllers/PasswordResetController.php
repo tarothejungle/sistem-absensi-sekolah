@@ -19,22 +19,32 @@ class PasswordResetController extends Controller
     public function sendResetLink(Request $request)
     {
         $request->validate([
-            'email' => 'required|email|exists:users,email',
+            'email' => 'required|email',
         ], [
             'email.required' => 'Email wajib diisi.',
             'email.email' => 'Format email tidak valid.',
-            'email.exists' => 'Email tidak ditemukan pada sistem.',
         ]);
 
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
+        try {
+            $status = Password::sendResetLink(
+                $request->only('email')
+            );
+        } catch (\Throwable $e) {
+            // Umumnya terjadi ketika server email (SMTP) tidak bisa dihubungi.
+            report($e);
 
-        if ($status === Password::RESET_LINK_SENT) {
-            return back()->with('success', 'Link reset password berhasil dikirim ke email Anda.');
+            return back()
+                ->withInput($request->only('email'))
+                ->with('error', 'Maaf, sistem sedang tidak dapat mengirim email reset password. Silakan coba beberapa saat lagi atau hubungi admin.');
         }
 
-        return back()->with('error', 'Gagal mengirim link reset password.');
+        if ($status === Password::RESET_THROTTLED) {
+            return back()
+                ->withInput($request->only('email'))
+                ->with('error', 'Anda baru saja meminta link reset. Silakan tunggu beberapa saat sebelum mencoba lagi.');
+        }
+
+        return back()->with('success', 'Jika email terdaftar, link reset password akan dikirim ke email tersebut.');
     }
 
     public function showResetForm(Request $request, string $token)
@@ -49,13 +59,12 @@ class PasswordResetController extends Controller
     {
         $request->validate([
             'token' => 'required',
-            'email' => 'required|email|exists:users,email',
-            'password' => 'required|min:5|confirmed',
+            'email' => 'required|email',
+            'password' => 'required|min:8|confirmed',
         ], [
             'email.required' => 'Email wajib diisi.',
-            'email.exists' => 'Email tidak ditemukan.',
             'password.required' => 'Password baru wajib diisi.',
-            'password.min' => 'Password minimal 5 karakter.',
+            'password.min' => 'Password minimal 8 karakter.',
             'password.confirmed' => 'Konfirmasi password tidak sesuai.',
         ]);
 

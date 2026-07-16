@@ -199,6 +199,7 @@ class PayrollController extends Controller
                 ->where('status_infal', 'disetujui')
                 ->whereNotNull('infal_teacher_id')
                 ->whereIn('jenis_pengajuan', $deductedLeaveTypes)
+                ->where('is_sementara', false)
                 ->whereDate('tanggal_mulai', '<=', $tanggalSelesai->toDateString())
                 ->whereDate('tanggal_selesai', '>=', $tanggalMulai->toDateString())
                 ->get();
@@ -420,6 +421,7 @@ class PayrollController extends Controller
             ->where('status_infal', 'disetujui')
             ->whereNotNull('infal_teacher_id')
             ->whereIn('jenis_pengajuan', $deductedLeaveTypes)
+            ->where('is_sementara', false)
             ->whereDate('tanggal_mulai', '<=', $end->toDateString())
             ->whereDate('tanggal_selesai', '>=', $start->toDateString())
             ->orderBy('tanggal_mulai')
@@ -618,6 +620,10 @@ class PayrollController extends Controller
         ]);
 
         foreach ($request->salaries as $teacherId => $data) {
+            if (!ctype_digit((string) $teacherId) || !Teacher::whereKey((int) $teacherId)->exists()) {
+                abort(422, 'Data guru pada pengaturan gaji tidak valid.');
+            }
+
             $gajiPokok = (float) ($data['gaji_pokok'] ?? 0);
 
             $potongan = $this->getPotonganPerAbsen($gajiPokok);

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
-use App\Models\AttendanceSession;
 use App\Models\DutySchedule;
 use App\Models\HolidaySetting;
 use App\Models\SchoolLocation;
@@ -13,6 +12,7 @@ use App\Services\GeoFenceService;
 use App\Services\DailyAttendanceStatusService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class AttendanceController extends Controller
 {
@@ -106,22 +106,10 @@ class AttendanceController extends Controller
 
     private function getTeacherSessions($teacher)
     {
-        $sessions = $teacher->attendanceSessions()
+        return $teacher->attendanceSessions()
             ->where('attendance_sessions.status', 'aktif')
             ->orderBy('attendance_sessions.jam_masuk')
             ->get();
-
-        if ($sessions->isEmpty() && $teacher->attendance_session_id) {
-            $oldSession = AttendanceSession::where('id', $teacher->attendance_session_id)
-                ->where('status', 'aktif')
-                ->first();
-
-            if ($oldSession) {
-                $sessions = collect([$oldSession]);
-            }
-        }
-
-        return $sessions;
     }
 
     private function isTimeInRangeString($current, $start, $end)
@@ -164,6 +152,14 @@ class AttendanceController extends Controller
 
     private function attendanceBlockMessage($teacher, string $date, ?WorkSchedule $schedule, bool $hasAnySchedule): ?string
     {
+        $approvedFullDayLeave = app(DailyAttendanceStatusService::class)
+            ->approvedFullDayLeaveForTeacherDate($teacher, $date);
+
+        if ($approvedFullDayLeave) {
+            return 'Karena pengajuan ' . $this->leaveStatusLabel($approvedFullDayLeave->jenis_pengajuan)
+                . ' Anda sudah disetujui. Kewajiban absen hari ini otomatis digugurkan.';
+        }
+
         $isOnDuty = $this->isTeacherOnActiveDuty($teacher, $date);
 
         if ($this->isActiveHoliday($date) && !$isOnDuty) {
@@ -175,6 +171,17 @@ class AttendanceController extends Controller
         }
 
         return null;
+    }
+
+    private function leaveStatusLabel(?string $status): string
+    {
+        return match ($status) {
+            'sakit' => 'sakit',
+            'izin' => 'izin',
+            'cuti' => 'cuti',
+            'tugas_luar' => 'tugas luar',
+            default => 'izin/cuti',
+        };
     }
 
     private function isActiveHoliday(string $date): bool
@@ -204,7 +211,7 @@ class AttendanceController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'accuracy' => 'nullable|numeric',
-            'face_image' => 'required|string',
+            'face_image' => 'required|string|max:4000000',
         ]);
 
         $teacher = auth()->user()->teacher;
@@ -350,7 +357,7 @@ class AttendanceController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'accuracy' => 'nullable|numeric',
-            'face_image' => 'required|string',
+            'face_image' => 'required|string|max:4000000',
         ]);
 
         $teacher = auth()->user()->teacher;
@@ -449,6 +456,26 @@ class AttendanceController extends Controller
         return back()->with('success', 'Check-out berhasil disimpan untuk ' . $session->nama_sesi . '.');
     }
 
+    public function photo(Attendance $attendance, string $type)
+    {
+        $user = auth()->user();
+        $teacher = $user->teacher;
+
+        $canViewReportPhoto = in_array($user->role, ['super_admin', 'kepala_sekolah'], true);
+        $ownsAttendance = $teacher && (int) $attendance->teacher_id === (int) $teacher->id;
+
+        abort_unless($canViewReportPhoto || $ownsAttendance, 403);
+
+        $column = $type === 'check-out' ? 'check_out_face_photo' : 'check_in_face_photo';
+        $path = $this->resolveAttendancePhotoPath($attendance->{$column});
+
+        if (!$path) {
+            abort(404, 'Foto absensi tidak ditemukan.');
+        }
+
+        return response()->file($path);
+    }
+
 
     private function resolvePerPage(Request $request, int $default = 7): int
     {
@@ -469,5 +496,38 @@ class AttendanceController extends Controller
             'Akurasi terdeteksi: ' . round($gpsAccuracy) . ' meter. ' .
             'Maksimal akurasi yang diizinkan: ' . self::MAX_GPS_ACCURACY_METERS . ' meter. ' .
             'Aktifkan mode akurasi tinggi GPS, mendekat ke area terbuka, lalu coba lagi.';
+    }
+
+    private function resolveAttendancePhotoPath(?string $relativePath): ?string
+    {
+        if (!$relativePath) {
+            return null;
+        }
+
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (str_starts_with($relativePath, 'public/')) {
+            $relativePath = substr($relativePath, strlen('public/'));
+        }
+
+        if (str_starts_with($relativePath, 'storage/')) {
+            $relativePath = substr($relativePath, strlen('storage/'));
+        }
+
+        if (str_contains($relativePath, '..') || !str_starts_with($relativePath, 'attendance_faces/')) {
+            return null;
+        }
+
+        if (Storage::disk('local')->exists($relativePath)) {
+            return Storage::disk('local')->path($relativePath);
+        }
+
+        if (Storage::disk('public')->exists($relativePath)) {
+            return Storage::disk('public')->path($relativePath);
+        }
+
+        $legacyPublicPath = public_path($relativePath);
+
+        return is_file($legacyPublicPath) ? $legacyPublicPath : null;
     }
 }

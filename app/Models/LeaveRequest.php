@@ -11,9 +11,12 @@ class LeaveRequest extends Model
     protected $fillable = [
         'teacher_id',
         'jenis_pengajuan',
+        'is_sementara',
         'infal_teacher_id',
         'tanggal_mulai',
         'tanggal_selesai',
+        'jam_mulai',
+        'jam_selesai',
         'alasan',
         'lampiran',
         'status_pengajuan',
@@ -23,7 +26,12 @@ class LeaveRequest extends Model
         'approved_by',
         'approved_at',
     ];
-    protected $casts = ['tanggal_mulai' => 'date', 'tanggal_selesai' => 'date', 'approved_at' => 'datetime'];
+    protected $casts = [
+        'is_sementara' => 'boolean',
+        'tanggal_mulai' => 'date',
+        'tanggal_selesai' => 'date',
+        'approved_at' => 'datetime',
+    ];
 
     public function teacher()
     {
@@ -35,4 +43,25 @@ class LeaveRequest extends Model
         return $this->belongsTo(Teacher::class, 'infal_teacher_id');
     }
     public function approver(): BelongsTo { return $this->belongsTo(User::class, 'approved_by'); }
+
+    public function tanggalLabel(): string
+    {
+        if (!$this->tanggal_mulai || !$this->tanggal_selesai) {
+            return '-';
+        }
+
+        if ($this->is_sementara) {
+            return $this->tanggal_mulai->format('d/m/Y') . ' '
+                . $this->formatTime($this->jam_mulai)
+                . ' - '
+                . $this->formatTime($this->jam_selesai);
+        }
+
+        return $this->tanggal_mulai->format('d/m/Y') . ' - ' . $this->tanggal_selesai->format('d/m/Y');
+    }
+
+    private function formatTime(?string $time): string
+    {
+        return $time ? substr($time, 0, 5) : '--:--';
+    }
 }

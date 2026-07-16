@@ -2,7 +2,9 @@
 
 namespace App\Http;
 
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
+use Illuminate\Routing\Router;
 
 class Kernel extends HttpKernel
 {
@@ -14,7 +16,7 @@ class Kernel extends HttpKernel
      * @var array<int, class-string|string>
      */
     protected $middleware = [
-        // \App\Http\Middleware\TrustHosts::class,
+        \App\Http\Middleware\TrustHosts::class,
         \App\Http\Middleware\TrustProxies::class,
         \Illuminate\Http\Middleware\HandleCors::class,
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
@@ -22,6 +24,18 @@ class Kernel extends HttpKernel
         \App\Http\Middleware\TrimStrings::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
     ];
+
+    public function __construct(Application $app, Router $router)
+    {
+        parent::__construct($app, $router);
+
+        // Middleware header keamanan bersifat opsional: berkasnya (App\Http\Middleware\SecurityHeaders)
+        // sengaja tidak disertakan di repository publik. Bila tersedia, otomatis diaktifkan
+        // sebagai lapisan terluar global stack — silakan implementasikan sendiri bila mengembangkan.
+        if (class_exists(\App\Http\Middleware\SecurityHeaders::class)) {
+            $this->middleware[] = \App\Http\Middleware\SecurityHeaders::class;
+        }
+    }
 
     /**
      * The application's route middleware groups.

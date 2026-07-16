@@ -72,13 +72,17 @@
                         {{-- Jenis --}}
                         <td>
                             {{ ucfirst(str_replace('_', ' ', $leave->jenis_pengajuan)) }}
+
+                            @if($leave->is_sementara)
+                                <div class="mt-1">
+                                    <span class="badge bg-info text-dark">Sementara</span>
+                                </div>
+                            @endif
                         </td>
 
                         {{-- Tanggal --}}
                         <td>
-                            {{ $leave->tanggal_mulai->format('d/m/Y') }}
-                            -
-                            {{ $leave->tanggal_selesai->format('d/m/Y') }}
+                            {{ $leave->tanggalLabel() }}
                         </td>
 
                         {{-- Alasan --}}

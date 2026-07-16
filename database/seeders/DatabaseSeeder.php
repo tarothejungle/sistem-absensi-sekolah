@@ -13,23 +13,9 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::create([
-            'nip' => 'ADM001',
-            'password' => Hash::make('password'),
-            'role' => 'super_admin',
-        ]);
-
-        $kepalaSekolah = User::create([
-            'nip' => 'KS001',
-            'password' => Hash::make('password'),
-            'role' => 'kepala_sekolah',
-        ]);
-
-        $guru = User::create([
-            'nip' => 'GURU001',
-            'password' => Hash::make('password'),
-            'role' => 'guru',
-        ]);
+        $admin = $this->createUserWithRole('ADM001', 'super_admin');
+        $kepalaSekolah = $this->createUserWithRole('KS001', 'kepala_sekolah');
+        $guru = $this->createUserWithRole('GURU001', 'guru');
 
         Teacher::create([
             'user_id' => $admin->id,
@@ -73,5 +59,21 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AttendanceSessionSeeder::class,
         ]);
+    }
+
+    /**
+     * role tidak fillable (anti privilege escalation) sehingga di-set eksplisit.
+     */
+    private function createUserWithRole(string $nip, string $role): User
+    {
+        $user = new User([
+            'nip' => $nip,
+            'password' => Hash::make('password'),
+        ]);
+        $user->role = $role;
+        $user->status = 'aktif';
+        $user->save();
+
+        return $user;
     }
 }

@@ -58,8 +58,9 @@
         <thead>
             <tr>
                 <th width="13%">Username</th>
-                <th width="19%">Nama Guru</th>
-                <th width="19%">Email</th>
+                <th width="18%">Nama Guru</th>
+                <th width="13%">Role</th>
+                <th width="18%">Email</th>
                 <!-- <th width="13%">Jabatan</th>
                 <th width="15%">Mapel</th> -->
                 <th width="16%">Sesi</th>
@@ -71,7 +72,8 @@
                 <tr>
                     <td>{{ $teacher->user->nip ?? '-' }}</td>
                     <td>{{ $teacher->nama_lengkap ?? '-' }}</td>
-                    <td>{{ $teacher->user->email ?? $teacher->email ?? '-' }}</td>
+                    <td>{{ \App\Models\Teacher::dataGuruRoleLabel($teacher->user->role ?? null) }}</td>
+                    <td>{{ $teacher->user->email ?? '-' }}</td>
                     <!-- <td>{{ $teacher->jabatan ?? '-' }}</td>
                     <td>{{ $teacher->mata_pelajaran ?? '-' }}</td> -->
                     <td>

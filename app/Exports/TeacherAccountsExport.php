@@ -12,7 +12,7 @@ class TeacherAccountsExport implements FromView
     {
         $teachers = Teacher::with(['user', 'attendanceSessions'])
             ->whereHas('user', function ($query) {
-                $query->where('role', 'guru');
+                $query->whereIn('role', Teacher::DATA_GURU_ROLES);
             })
             ->orderBy('nama_lengkap')
             ->get();

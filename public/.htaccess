@@ -30,4 +30,12 @@
     Deny from all
 </FilesMatch>
 
+# Cegah akses langsung ke lampiran izin/cuti (dokumen pribadi/medis).
+# File asli sudah dipindah ke storage privat & hanya bisa diakses lewat
+# route leave.attachment.show yang memeriksa kepemilikan/role.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^leave_attachments/ - [F,L]
+</IfModule>
+
 Options -Indexes

@@ -3,13 +3,13 @@
 @section('content')
 <div class="container-fluid">
     <div class="ui-page-hero">
-        <h3>{{ $user ? 'Edit Pengguna' : 'Tambah Pengguna' }}</h3>
-        <p>Kelola akun bendahara, kepala sekolah, dan super admin.</p>
+        <h3>{{ $user ? 'Edit Admin' : 'Tambah Admin' }}</h3>
+        <p>Kelola akun super admin untuk administrasi sistem.</p>
     </div>
 
     @if($errors->any())
         <div class="ui-error-summary">
-            <strong><i class="bi bi-exclamation-triangle"></i> Data pengguna belum bisa disimpan</strong>
+            <strong><i class="bi bi-exclamation-triangle"></i> Data admin belum bisa disimpan</strong>
             <ul class="mb-0">
                 @foreach($errors->all() as $error)
                     <li>{{ $error }}</li>
@@ -35,7 +35,7 @@
                         <span class="ui-form-section-icon"><i class="bi bi-person-vcard"></i></span>
                         <div>
                             <h5 class="ui-form-section-title">Informasi Akun</h5>
-                            <p class="ui-form-section-subtitle">Data ini digunakan untuk login dan hak akses pengguna.</p>
+                            <p class="ui-form-section-subtitle">Data ini digunakan untuk login super admin.</p>
                         </div>
                     </div>
 
@@ -76,44 +76,7 @@
                             >
                         </div>
 
-                        <div class="col-md-3 ui-field">
-                            <label class="form-label">Role</label>
-                            <select name="role" class="form-select" required>
-                                <option value="">Pilih role</option>
-                                <option value="bendahara" {{ old('role', $user->role ?? '') === 'bendahara' ? 'selected' : '' }}>
-                                    Bendahara
-                                </option>
-                                <option value="kepala_sekolah" {{ old('role', $user->role ?? '') === 'kepala_sekolah' ? 'selected' : '' }}>
-                                    Kepala Sekolah
-                                </option>
-                                <option value="super_admin" {{ old('role', $user->role ?? '') === 'super_admin' ? 'selected' : '' }}>
-                                    Super Admin
-                                </option>
-                            </select>
-                        </div>
-
-                        <div class="col-md-3 ui-field">
-                            <label class="form-label d-block">Status</label>
-                            <input type="hidden" name="status" value="nonaktif">
-                            <label class="form-switch-card">
-                                <input type="checkbox" name="status" value="aktif" @checked(old('status', $user->status ?? 'aktif') === 'aktif')>
-                                <span class="form-switch-visual"></span>
-                                <span>Aktif</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ui-form-section">
-                    <div class="ui-form-section-head">
-                        <span class="ui-form-section-icon"><i class="bi bi-shield-lock"></i></span>
-                        <div>
-                            <h5 class="ui-form-section-title">Keamanan</h5>
-                            <p class="ui-form-section-subtitle">{{ $user ? 'Kosongkan password jika tidak ingin mengubah akses login.' : 'Buat password awal untuk pengguna baru.' }}</p>
-                        </div>
-                    </div>
-
-                    <div class="ui-field">
+                    <div class="col-md-6 ui-field">
                         <label class="form-label">
                             Password {{ $user ? '(Opsional)' : '' }}
                         </label>
@@ -122,7 +85,8 @@
                             <input
                                 type="password"
                                 name="password"
-                                class="form-control"
+                                class="form-control password-input"
+                                data-strong-password
                                 placeholder="{{ $user ? 'Kosongkan jika tidak ingin mengubah password' : 'Masukkan password' }}"
                                 {{ $user ? '' : 'required' }}
                             >
@@ -136,6 +100,8 @@
                                 <i class="bi bi-eye"></i>
                             </button>
                         </div>
+                        <small class="text-muted d-block mt-2" data-password-requirements>Minimal 8 karakter, huruf besar-kecil, angka, dan simbol.</small>
+                    </div>
                     </div>
                 </div>
 
@@ -146,7 +112,7 @@
                     </a>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-save"></i>
-                        Simpan Pengguna
+                        Simpan Admin
                     </button>
                 </div>
             </form>
@@ -154,3 +120,18 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    document.querySelectorAll('[data-strong-password]').forEach(function (input) {
+        input.addEventListener('input', function () {
+            const valid = input.value.length >= 8
+                && /[a-z]/.test(input.value)
+                && /[A-Z]/.test(input.value)
+                && /[0-9]/.test(input.value)
+                && /[^A-Za-z0-9]/.test(input.value);
+            input.setCustomValidity(input.value && !valid ? 'Password harus minimal 8 karakter dan berisi huruf besar, huruf kecil, angka, serta simbol.' : '');
+        });
+    });
+</script>
+@endpush

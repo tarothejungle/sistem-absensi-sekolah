@@ -6,6 +6,10 @@
     $modeGantiInfal = $leave->infal_teacher_id
         && $leave->status_pengajuan === 'disetujui'
         && $leave->status_infal === 'ditolak';
+
+    $isSementara = old('is_sementara', $leave->is_sementara ? '1' : '0') == '1';
+    $jamMulaiValue = old('jam_mulai', $leave->jam_mulai ? substr($leave->jam_mulai, 0, 5) : '');
+    $jamSelesaiValue = old('jam_selesai', $leave->jam_selesai ? substr($leave->jam_selesai, 0, 5) : '');
 @endphp
 
 <div class="container-fluid">
@@ -20,21 +24,43 @@
                 action="{{ route('leave.update', $leave) }}"
                 method="POST"
                 enctype="multipart/form-data"
+                data-leave-duration-form
+                data-leave-duration-locked="{{ $modeGantiInfal ? '1' : '0' }}"
             >
                 @csrf
                 @method('PUT')
+                <input type="hidden" name="is_sementara" value="0">
 
                 <div class="ui-form-section">
                     <div class="ui-form-section-head">
                         <span class="ui-form-section-icon"><i class="bi bi-calendar2-week"></i></span>
                         <div>
                             <h5 class="ui-form-section-title">Detail Pengajuan</h5>
-                            <p class="ui-form-section-subtitle">Perbarui jenis pengajuan dan rentang tanggal sesuai kebutuhan.</p>
+                            <p class="ui-form-section-subtitle">Perbarui jenis pengajuan dan durasi sesuai kebutuhan.</p>
                         </div>
                     </div>
 
+                    <div class="form-check form-switch mb-3">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="is_sementara"
+                            name="is_sementara"
+                            value="1"
+                            data-leave-temporary-toggle
+                            {{ $isSementara ? 'checked' : '' }}
+                            {{ $modeGantiInfal ? 'disabled' : '' }}
+                        >
+                        <label class="form-check-label" for="is_sementara">Izin sementara</label>
+                    </div>
+
+                    @error('is_sementara')
+                        <small class="text-danger d-block mb-2">{{ $message }}</small>
+                    @enderror
+
                     <div class="row g-3">
-                        <div class="col-md-4 ui-field">
+                        <div class="col-lg-3 col-md-6 ui-field">
                             <label class="form-label">Jenis</label>
                             <select
                                 name="jenis_pengajuan"
@@ -49,12 +75,12 @@
                             </select>
 
                             @error('jenis_pengajuan')
-                                <small class="text-danger">{{ $message }}</small>
+                                <small class="text-danger d-block">{{ $message }}</small>
                             @enderror
                         </div>
 
-                        <div class="col-md-4 ui-field">
-                            <label class="form-label">Tanggal Mulai</label>
+                        <div class="col-lg-3 col-md-6 ui-field">
+                            <label class="form-label" data-leave-start-label>{{ $isSementara ? 'Tanggal Izin' : 'Tanggal Mulai' }}</label>
                             <input
                                 type="date"
                                 name="tanggal_mulai"
@@ -65,23 +91,55 @@
                             >
 
                             @error('tanggal_mulai')
-                                <small class="text-danger">{{ $message }}</small>
+                                <small class="text-danger d-block">{{ $message }}</small>
                             @enderror
                         </div>
 
-                        <div class="col-md-4 ui-field">
+                        <div class="col-lg-3 col-md-6 ui-field {{ $isSementara ? 'd-none' : '' }}" data-leave-full-day-field>
                             <label class="form-label">Tanggal Selesai</label>
                             <input
                                 type="date"
                                 name="tanggal_selesai"
                                 class="form-control"
                                 value="{{ old('tanggal_selesai', $leave->tanggal_selesai->format('Y-m-d')) }}"
-                                required
-                                {{ $modeGantiInfal ? 'disabled' : '' }}
+                                data-leave-end-date
+                                {{ $isSementara || $modeGantiInfal ? 'disabled' : 'required' }}
                             >
 
                             @error('tanggal_selesai')
-                                <small class="text-danger">{{ $message }}</small>
+                                <small class="text-danger d-block">{{ $message }}</small>
+                            @enderror
+                        </div>
+
+                        <div class="col-lg-3 col-md-6 ui-field {{ $isSementara ? '' : 'd-none' }}" data-leave-temporary-field>
+                            <label class="form-label">Jam Mulai</label>
+                            <input
+                                type="time"
+                                name="jam_mulai"
+                                class="form-control"
+                                value="{{ $jamMulaiValue }}"
+                                data-leave-temporary-input
+                                {{ $isSementara && ! $modeGantiInfal ? 'required' : 'disabled' }}
+                            >
+
+                            @error('jam_mulai')
+                                <small class="text-danger d-block">{{ $message }}</small>
+                            @enderror
+                        </div>
+
+                        <div class="col-lg-3 col-md-6 ui-field {{ $isSementara ? '' : 'd-none' }}" data-leave-temporary-field>
+                            <label class="form-label">Jam Selesai</label>
+                            <input
+                                type="time"
+                                name="jam_selesai"
+                                class="form-control"
+                                value="{{ $jamSelesaiValue }}"
+                                data-leave-temporary-input
+                                {{ $isSementara && ! $modeGantiInfal ? 'required' : 'disabled' }}
+                            >
+
+                            @error('jam_selesai')
+                                <small class="text-danger d-block">{{ $message }}</small>
                             @enderror
                         </div>
                     </div>
@@ -139,7 +197,7 @@
                             >{{ old('alasan', $leave->alasan) }}</textarea>
 
                             @error('alasan')
-                                <small class="text-danger">{{ $message }}</small>
+                                <small class="text-danger d-block">{{ $message }}</small>
                             @enderror
                         </div>
 
@@ -187,3 +245,52 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-leave-duration-form]').forEach(function (form) {
+            const toggle = form.querySelector('[data-leave-temporary-toggle]');
+            const startLabel = form.querySelector('[data-leave-start-label]');
+            const endDateInput = form.querySelector('[data-leave-end-date]');
+            const fullDayFields = form.querySelectorAll('[data-leave-full-day-field]');
+            const temporaryFields = form.querySelectorAll('[data-leave-temporary-field]');
+            const temporaryInputs = form.querySelectorAll('[data-leave-temporary-input]');
+            const isLocked = form.dataset.leaveDurationLocked === '1';
+
+            if (!toggle) {
+                return;
+            }
+
+            function syncLeaveDurationFields() {
+                const isTemporary = toggle.checked;
+
+                fullDayFields.forEach(function (field) {
+                    field.classList.toggle('d-none', isTemporary);
+                });
+
+                temporaryFields.forEach(function (field) {
+                    field.classList.toggle('d-none', !isTemporary);
+                });
+
+                if (startLabel) {
+                    startLabel.textContent = isTemporary ? 'Tanggal Izin' : 'Tanggal Mulai';
+                }
+
+                if (endDateInput) {
+                    endDateInput.disabled = isLocked || isTemporary;
+                    endDateInput.required = !isLocked && !isTemporary;
+                }
+
+                temporaryInputs.forEach(function (input) {
+                    input.disabled = isLocked || !isTemporary;
+                    input.required = !isLocked && isTemporary;
+                });
+            }
+
+            syncLeaveDurationFields();
+            toggle.addEventListener('change', syncLeaveDurationFields);
+        });
+    });
+</script>
+@endpush

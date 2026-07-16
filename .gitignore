@@ -22,6 +22,16 @@
 .env.production
 .env.local
 .env.*.local
+hosting.env
+*.env
+!.env.example
+
+# Berkas krusial/internal (sengaja tidak dipublikasikan — dikembangkan sendiri)
+/docs/SECURITY-HARDENING.md
+/app/Http/Middleware/SecurityHeaders.php
+/app/Support/ConfigSanitizer.php
+/config/security.php
+/tests/Unit/ConfigSanitizerTest.php
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml

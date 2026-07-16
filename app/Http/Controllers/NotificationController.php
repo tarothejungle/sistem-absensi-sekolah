@@ -15,7 +15,7 @@ class NotificationController extends Controller
             $notification->update(['read_at' => now()]);
         }
 
-        return redirect($notification->url ?: route('dashboard'));
+        return redirect($this->safeRedirectUrl($notification->url));
     }
 
     public function readAll(): RedirectResponse
@@ -25,5 +25,27 @@ class NotificationController extends Controller
             ->update(['read_at' => now()]);
 
         return back()->with('success', 'Semua notifikasi sudah ditandai dibaca.');
+    }
+
+    private function safeRedirectUrl(?string $url): string
+    {
+        if (!$url) {
+            return route('dashboard');
+        }
+
+        $url = trim($url);
+
+        if (str_starts_with($url, '/')) {
+            return $url;
+        }
+
+        $appHost = parse_url(config('app.url'), PHP_URL_HOST);
+        $targetHost = parse_url($url, PHP_URL_HOST);
+
+        if ($targetHost && $appHost && strcasecmp($targetHost, $appHost) === 0) {
+            return $url;
+        }
+
+        return route('dashboard');
     }
 }

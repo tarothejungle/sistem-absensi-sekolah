@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AppNotificationService;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class LeaveRequestController extends Controller
 {
@@ -141,23 +142,14 @@ class LeaveRequestController extends Controller
                     : 'Pengajuan diperbarui tanpa guru pengganti.'
                 );
         }
+
+        if ($leave->status_pengajuan !== 'pending') {
+            return redirect()
+                ->route('leave.index')
+                ->with('error', 'Pengajuan ini tidak dapat diedit karena sudah diproses.');
+        }
     
-        $request->validate([
-            'jenis_pengajuan' => 'required|in:sakit,izin,cuti,tugas_luar',
-            'tanggal_mulai' => 'required|date',
-            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
-            'alasan' => 'required|string',
-            'lampiran' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
-            'infal_teacher_id' => 'nullable|exists:teachers,id',
-        ], [
-            'jenis_pengajuan.required' => 'Jenis pengajuan wajib dipilih.',
-            'tanggal_mulai.required' => 'Tanggal mulai wajib diisi.',
-            'tanggal_selesai.required' => 'Tanggal selesai wajib diisi.',
-            'tanggal_selesai.after_or_equal' => 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.',
-            'alasan.required' => 'Alasan wajib diisi.',
-            'lampiran.mimes' => 'Lampiran harus berupa JPG, JPEG, PNG, atau PDF.',
-            'lampiran.max' => 'Ukuran lampiran maksimal 2MB.',
-        ]);
+        $validated = $this->validateLeaveRequestPayload($request);
 
         if ($request->filled('infal_teacher_id') && (int) $request->infal_teacher_id === (int) $leave->teacher_id) {
             return back()
@@ -165,23 +157,19 @@ class LeaveRequestController extends Controller
                 ->with('error', 'Guru pengganti tidak boleh sama dengan guru yang mengajukan.');
         }
     
-        $infalTeacherId = $request->filled('infal_teacher_id')
-            ? $request->infal_teacher_id
-            : null;
+        $infalTeacherId = $validated['infal_teacher_id'];
 
         $data = [
-            'jenis_pengajuan' => $request->jenis_pengajuan,
+            'jenis_pengajuan' => $validated['jenis_pengajuan'],
             'infal_teacher_id' => $infalTeacherId,
-            'tanggal_mulai' => $request->tanggal_mulai,
-            'tanggal_selesai' => $request->tanggal_selesai,
-            'alasan' => $request->alasan,
+            'is_sementara' => $validated['is_sementara'],
+            'tanggal_mulai' => $validated['tanggal_mulai'],
+            'tanggal_selesai' => $validated['tanggal_selesai'],
+            'jam_mulai' => $validated['jam_mulai'],
+            'jam_selesai' => $validated['jam_selesai'],
+            'alasan' => $validated['alasan'],
             'status_infal' => $infalTeacherId ? 'pending' : 'disetujui',
         ];
-    
-        if ($leave->status_pengajuan === 'pending') {
-            $data['infal_teacher_id'] = $request->infal_teacher_id;
-            $data['status_infal'] = 'pending';
-        }
     
         if ($request->hasFile('lampiran')) {
             $this->deleteAttachmentFile($leave->lampiran);
@@ -227,22 +215,7 @@ class LeaveRequestController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'jenis_pengajuan' => 'required|in:sakit,izin,cuti,tugas_luar',
-            'infal_teacher_id' => 'nullable|exists:teachers,id',
-            'tanggal_mulai' => 'required|date',
-            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
-            'alasan' => 'required|string',
-            'lampiran' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
-        ], [
-            'jenis_pengajuan.required' => 'Jenis pengajuan wajib dipilih.',
-            'tanggal_mulai.required' => 'Tanggal mulai wajib diisi.',
-            'tanggal_selesai.required' => 'Tanggal selesai wajib diisi.',
-            'tanggal_selesai.after_or_equal' => 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.',
-            'alasan.required' => 'Alasan wajib diisi.',
-            'lampiran.mimes' => 'Lampiran harus berupa JPG, JPEG, PNG, atau PDF.',
-            'lampiran.max' => 'Ukuran lampiran maksimal 2MB.',
-        ]);
+        $validated = $this->validateLeaveRequestPayload($request);
 
         $user = auth()->user();
         $teacher = $user->teacher;
@@ -261,17 +234,18 @@ class LeaveRequestController extends Controller
                 ->with('error', 'Guru pengganti tidak boleh sama dengan guru yang mengajukan.');
         }
 
-        $infalTeacherId = $request->filled('infal_teacher_id')
-            ? $request->infal_teacher_id
-            : null;
+        $infalTeacherId = $validated['infal_teacher_id'];
 
         $data = [
             'teacher_id' => $teacher->id,
-            'jenis_pengajuan' => $request->jenis_pengajuan,
+            'jenis_pengajuan' => $validated['jenis_pengajuan'],
             'infal_teacher_id' => $infalTeacherId,
-            'tanggal_mulai' => $request->tanggal_mulai,
-            'tanggal_selesai' => $request->tanggal_selesai,
-            'alasan' => $request->alasan,
+            'is_sementara' => $validated['is_sementara'],
+            'tanggal_mulai' => $validated['tanggal_mulai'],
+            'tanggal_selesai' => $validated['tanggal_selesai'],
+            'jam_mulai' => $validated['jam_mulai'],
+            'jam_selesai' => $validated['jam_selesai'],
+            'alasan' => $validated['alasan'],
             'status_pengajuan' => 'pending',
             'status_infal' => $infalTeacherId ? 'pending' : 'disetujui',
         ];
@@ -498,33 +472,86 @@ class LeaveRequestController extends Controller
         return response()->file($path);
     }
 
-    private function storeAttachmentFile($file): string
+    private function validateLeaveRequestPayload(Request $request): array
     {
-        $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-        $destinationPath = public_path('leave_attachments');
+        $isSementara = $request->boolean('is_sementara');
 
-        if (!is_dir($destinationPath)) {
-            mkdir($destinationPath, 0755, true);
+        $rules = [
+            'jenis_pengajuan' => 'required|in:sakit,izin,cuti,tugas_luar',
+            'is_sementara' => 'nullable|boolean',
+            'infal_teacher_id' => 'nullable|exists:teachers,id',
+            'tanggal_mulai' => 'required|date',
+            'alasan' => 'required|string',
+            'lampiran' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+        ];
+
+        if ($isSementara) {
+            $rules['tanggal_selesai'] = 'nullable|date';
+            $rules['jam_mulai'] = 'required|date_format:H:i';
+            $rules['jam_selesai'] = 'required|date_format:H:i|after:jam_mulai';
+        } else {
+            $rules['tanggal_selesai'] = 'required|date|after_or_equal:tanggal_mulai';
+            $rules['jam_mulai'] = 'nullable|date_format:H:i';
+            $rules['jam_selesai'] = 'nullable|date_format:H:i';
         }
 
-        $file->move($destinationPath, $fileName);
+        $validated = $request->validate($rules, [
+            'jenis_pengajuan.required' => 'Jenis pengajuan wajib dipilih.',
+            'is_sementara.boolean' => 'Pilihan izin sementara tidak valid.',
+            'tanggal_mulai.required' => 'Tanggal izin wajib diisi.',
+            'tanggal_selesai.required' => 'Tanggal selesai wajib diisi.',
+            'tanggal_selesai.after_or_equal' => 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.',
+            'jam_mulai.required' => 'Jam mulai wajib diisi untuk izin sementara.',
+            'jam_mulai.date_format' => 'Format jam mulai tidak valid.',
+            'jam_selesai.required' => 'Jam selesai wajib diisi untuk izin sementara.',
+            'jam_selesai.date_format' => 'Format jam selesai tidak valid.',
+            'jam_selesai.after' => 'Jam selesai harus setelah jam mulai.',
+            'alasan.required' => 'Alasan wajib diisi.',
+            'lampiran.mimes' => 'Lampiran harus berupa JPG, JPEG, PNG, atau PDF.',
+            'lampiran.max' => 'Ukuran lampiran maksimal 2MB.',
+        ]);
 
-        return 'leave_attachments/' . $fileName;
+        $validated['is_sementara'] = $isSementara;
+        $validated['infal_teacher_id'] = $validated['infal_teacher_id'] ?? null;
+
+        if ($isSementara) {
+            $validated['tanggal_selesai'] = $validated['tanggal_mulai'];
+        } else {
+            $validated['jam_mulai'] = null;
+            $validated['jam_selesai'] = null;
+        }
+
+        $validated['jam_mulai'] = $validated['jam_mulai'] ?? null;
+        $validated['jam_selesai'] = $validated['jam_selesai'] ?? null;
+
+        return $validated;
+    }
+
+
+    private function storeAttachmentFile($file): string
+    {
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin');
+        $fileName = time() . '_' . uniqid('', true) . '.' . $extension;
+        $relativePath = 'leave_attachments/' . $fileName;
+
+        Storage::disk('local')->putFileAs('leave_attachments', $file, $fileName);
+
+        return $relativePath;
     }
 
     private function resolveAttachmentPath(?string $relativePath): ?string
     {
+        $relativePath = $this->normalizeAttachmentPath($relativePath);
+
         if (!$relativePath) {
             return null;
         }
 
-        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
-
-        if (str_contains($relativePath, '..')) {
-            return null;
+        if (Storage::disk('local')->exists($relativePath)) {
+            return Storage::disk('local')->path($relativePath);
         }
 
-        foreach ([public_path($relativePath), base_path($relativePath)] as $path) {
+        foreach ([public_path($relativePath), storage_path('app/public/' . $relativePath)] as $path) {
             if (is_file($path)) {
                 return $path;
             }
@@ -535,21 +562,40 @@ class LeaveRequestController extends Controller
 
     private function deleteAttachmentFile(?string $relativePath): void
     {
+        $relativePath = $this->normalizeAttachmentPath($relativePath);
+
         if (!$relativePath) {
             return;
         }
 
-        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
-
-        if (str_contains($relativePath, '..')) {
-            return;
+        if (Storage::disk('local')->exists($relativePath)) {
+            Storage::disk('local')->delete($relativePath);
         }
 
-        foreach ([public_path($relativePath), base_path($relativePath)] as $path) {
+        foreach ([public_path($relativePath), storage_path('app/public/' . $relativePath)] as $path) {
             if (is_file($path)) {
                 unlink($path);
             }
         }
+    }
+
+    private function normalizeAttachmentPath(?string $relativePath): ?string
+    {
+        if (!$relativePath) {
+            return null;
+        }
+
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (str_starts_with($relativePath, 'public/')) {
+            $relativePath = substr($relativePath, strlen('public/'));
+        }
+
+        if (str_contains($relativePath, '..') || !str_starts_with($relativePath, 'leave_attachments/')) {
+            return null;
+        }
+
+        return $relativePath;
     }
 
 

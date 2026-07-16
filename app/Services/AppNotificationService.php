@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\AppNotification;
 use App\Models\Attendance;
-use App\Models\AttendanceSession;
 use App\Models\User;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
@@ -112,16 +111,6 @@ class AppNotificationService
             ->where('attendance_sessions.status', 'aktif')
             ->orderBy('attendance_sessions.jam_masuk')
             ->get();
-
-        if ($sessions->isEmpty() && $teacher->attendance_session_id) {
-            $oldSession = AttendanceSession::where('id', $teacher->attendance_session_id)
-                ->where('status', 'aktif')
-                ->first();
-
-            if ($oldSession) {
-                $sessions = collect([$oldSession]);
-            }
-        }
 
         foreach ($sessions as $session) {
             $attendance = Attendance::where('teacher_id', $teacher->id)

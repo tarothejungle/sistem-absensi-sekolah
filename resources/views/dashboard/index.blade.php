@@ -47,6 +47,12 @@
                     <span>Profil</span>
                     <strong>{{ $teacher?->nama_lengkap ? 'Lengkap' : 'Perlu dicek' }}</strong>
                 </div>
+                @if(auth()->user()->role === 'kepala_sekolah')
+                    <div class="dashboard-summary-row">
+                        <span>Belum Absen</span>
+                        <strong>{{ $belumAbsenHariIni ?? 0 }}</strong>
+                    </div>
+                @endif
             </div>
         </div>
 
@@ -118,7 +124,7 @@
                             <div class="info-row"><div class="info-label">Pendidikan Terakhir</div><div class="info-value">{{ $user->pendidikan_terakhir ?? '-' }}</div></div>
                             <div class="info-row"><div class="info-label">Jenis Kelamin</div><div class="info-value">{{ $teacher->jenis_kelamin ?? '-' }}</div></div>
                             <div class="info-row"><div class="info-label">No HP</div><div class="info-value">{{ $teacher->no_hp ?? '-' }}</div></div>
-                            <div class="info-row"><div class="info-label">Email</div><div class="info-value">{{ $user->email ?? $teacher->email ?? '-' }}</div></div>
+                            <div class="info-row"><div class="info-label">Email</div><div class="info-value">{{ $user->email ?? '-' }}</div></div>
                             <div class="info-row"><div class="info-label">Mata Pelajaran</div><div class="info-value">{{ $teacher->mata_pelajaran ?? '-' }}</div></div>
                             <div class="info-row">
                                 <div class="info-label">Sesi Absensi</div>
@@ -144,6 +150,10 @@
         </div>
 
         @if(auth()->user()->role === 'kepala_sekolah')
+            @include('dashboard.partials.missing-attendance-teachers', [
+                'guruBelumAbsen' => $guruBelumAbsenHariIni ?? collect(),
+            ])
+
             <div class="card mt-4">
                 <div class="card-body">
                     <div class="ui-section-title">
@@ -216,6 +226,10 @@
                     <span>Hadir Lengkap</span>
                     <strong>{{ $hadirHariIni ?? 0 }}</strong>
                 </div>
+                <div class="dashboard-summary-row">
+                    <span>Belum Absen</span>
+                    <strong>{{ $belumAbsenHariIni ?? 0 }}</strong>
+                </div>
             </div>
         </div>
 
@@ -227,7 +241,11 @@
             <div class="col-md-6 col-xl"><div class="metric-card metric-red"><div class="metric-icon"><i class="bi bi-exclamation-triangle-fill"></i></div><div class="metric-label">Belum Absen</div><div class="metric-value">{{ $belumAbsenHariIni ?? 0 }}</div></div></div>
         </div>
 
-        <div class="card">
+        @include('dashboard.partials.missing-attendance-teachers', [
+            'guruBelumAbsen' => $guruBelumAbsenHariIni ?? collect(),
+        ])
+
+        <div class="card mt-4">
             <div class="card-body">
                 <div class="ui-section-title">
                     <i class="bi bi-clipboard2-data"></i>

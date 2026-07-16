@@ -37,12 +37,7 @@ class DailyAttendanceStatusService
                 continue;
             }
 
-            $approvedLeave = LeaveRequest::where('teacher_id', $teacher->id)
-                ->where('status_pengajuan', 'disetujui')
-                ->whereDate('tanggal_mulai', '<=', $todayString)
-                ->whereDate('tanggal_selesai', '>=', $todayString)
-                ->latest('updated_at')
-                ->first();
+            $approvedLeave = $this->approvedFullDayLeaveForTeacherDate($teacher, $targetDate);
 
             $schedule = $this->todaySchedule($teacher, $hari);
             $session = $this->firstActiveSession($teacher);
@@ -117,6 +112,65 @@ class DailyAttendanceStatusService
             ->unique('id')
             ->sortBy('nama_lengkap')
             ->values();
+    }
+
+    public function missingAttendanceTeachersForDate(
+        $date = null,
+        ?Collection $expectedTeachers = null,
+        ?Collection $dailyAttendances = null
+    ): Collection
+    {
+        $targetDate = $this->parseDate($date);
+        $todayString = $targetDate->toDateString();
+
+        $expectedTeachers ??= $this->expectedTeachersForDate($targetDate);
+        $dailyAttendances ??= Attendance::whereDate('tanggal', $todayString)
+            ->whereHas('teacher.user', function ($query) {
+                $query->where('status', 'aktif');
+            })
+            ->get();
+
+        $attendancesByTeacher = $dailyAttendances->groupBy('teacher_id');
+        $excusedStatuses = ['izin', 'sakit', 'cuti', 'tugas_luar'];
+
+        return $expectedTeachers
+            ->filter(function (Teacher $teacher) use ($attendancesByTeacher, $excusedStatuses) {
+                $teacherAttendances = $attendancesByTeacher->get($teacher->id, collect());
+
+                if ($teacherAttendances->isEmpty()) {
+                    return true;
+                }
+
+                if ($teacherAttendances->contains(fn (Attendance $attendance) => !is_null($attendance->check_in_time))) {
+                    return false;
+                }
+
+                return !$teacherAttendances->contains(function (Attendance $attendance) use ($excusedStatuses) {
+                    return in_array($attendance->status_kehadiran, $excusedStatuses, true);
+                });
+            })
+            ->map(function (Teacher $teacher) use ($attendancesByTeacher) {
+                $attendance = $attendancesByTeacher->get($teacher->id, collect())->first();
+
+                $teacher->setAttribute('missing_attendance_status', $attendance?->status_kehadiran);
+
+                return $teacher;
+            })
+            ->values();
+    }
+
+    public function approvedFullDayLeaveForTeacherDate(Teacher $teacher, $date = null): ?LeaveRequest
+    {
+        $targetDate = $this->parseDate($date);
+        $todayString = $targetDate->toDateString();
+
+        return LeaveRequest::where('teacher_id', $teacher->id)
+            ->where('status_pengajuan', 'disetujui')
+            ->where('is_sementara', false)
+            ->whereDate('tanggal_mulai', '<=', $todayString)
+            ->whereDate('tanggal_selesai', '>=', $todayString)
+            ->latest('updated_at')
+            ->first();
     }
 
     private function activeDutyTeachersForDate(Carbon $targetDate): Collection
@@ -302,21 +356,9 @@ class DailyAttendanceStatusService
 
     private function activeSessions(Teacher $teacher): Collection
     {
-        $sessions = $teacher->attendanceSessions
+        return $teacher->attendanceSessions
             ? $teacher->attendanceSessions->where('status', 'aktif')->sortBy('jam_masuk')->values()
             : collect();
-
-        if ($sessions->isEmpty() && $teacher->attendance_session_id) {
-            $oldSession = AttendanceSession::where('id', $teacher->attendance_session_id)
-                ->where('status', 'aktif')
-                ->first();
-
-            if ($oldSession) {
-                return collect([$oldSession]);
-            }
-        }
-
-        return $sessions;
     }
 
     private function firstActiveSession(Teacher $teacher): ?AttendanceSession

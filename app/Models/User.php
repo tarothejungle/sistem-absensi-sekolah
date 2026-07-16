@@ -11,7 +11,10 @@ class User extends Authenticatable
 {
     use Notifiable;
 
-    protected $fillable = ['nip', 'name', 'email', 'profile_photo', 'instansi_mengajar', 'tempat_lahir', 'tanggal_lahir', 'pendidikan_terakhir', 'password', 'role', 'status', 'last_login'];
+    // Catatan keamanan: 'role' dan 'status' sengaja TIDAK di-fillable agar tidak
+    // pernah bisa diubah lewat mass-assignment (mis. $user->update($request->all())).
+    // Keduanya hanya boleh diset eksplisit via forceFill() di endpoint admin.
+    protected $fillable = ['nip', 'name', 'email', 'profile_photo', 'instansi_mengajar', 'tempat_lahir', 'tanggal_lahir', 'pendidikan_terakhir', 'password', 'last_login'];
     protected $hidden = ['password', 'remember_token'];
     protected $casts = ['last_login' => 'datetime', 'password' => 'hashed'];
 

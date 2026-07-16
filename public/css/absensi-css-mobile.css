@@ -1,0 +1,155 @@
+/* Mobile-only styling extracted from absensi-ui-final.css */
+@media (max-width: 768px) {
+    .ui-page-hero .btn,
+    .ui-page-hero .btn-add-primary,
+    .page-header .btn,
+    .page-header .btn-add-primary {
+        width: 100%;
+        margin-left: 0 !important;
+    }
+
+    .ui-toolbar {
+        flex-direction: column;
+        align-items: stretch !important;
+    }
+
+    .ui-actions {
+        width: 100%;
+    }
+
+    .ui-actions .btn {
+        flex: 1;
+    }
+
+    .card-body {
+        padding: 16px !important;
+    }
+
+    .ui-form-actions .btn,
+    .ui-form-actions .btn-add-primary,
+    .ui-filter-actions,
+    .ui-filter-actions .btn {
+        width: 100%;
+    }
+
+    body.app-shell {
+        padding-bottom: 104px !important;
+    }
+
+    .topbar {
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        gap: 10px !important;
+        padding: 0 12px !important;
+    }
+
+    .topbar-left,
+    .app-menu-button,
+    #mobileSidebarBackdrop,
+    .mobile-sidebar-backdrop,
+    .app-sidebar {
+        display: none !important;
+    }
+
+    .topbar-title {
+        align-items: flex-start !important;
+        justify-self: start !important;
+        text-align: left !important;
+    }
+
+    .topbar-mobile-brand {
+        display: inline-flex !important;
+        max-width: calc(100vw - 178px);
+    }
+
+    .topbar-mobile-brand span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .topbar-right {
+        justify-self: end !important;
+        gap: 8px !important;
+        width: auto !important;
+    }
+
+    .theme-toggle,
+    .notification-button,
+    .profile-button {
+        flex: 0 0 auto;
+    }
+
+    .profile-button {
+        display: inline-flex !important;
+        width: 40px !important;
+        min-width: 40px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        padding: 0 !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 1px solid rgba(255, 255, 255, .18) !important;
+        border-radius: 12px !important;
+        background: rgba(255, 255, 255, .08) !important;
+        color: #fff !important;
+    }
+
+    .profile-button:hover,
+    .profile-button[aria-expanded="true"] {
+        background: rgba(255, 255, 255, .16) !important;
+        border-color: rgba(255, 255, 255, .28) !important;
+        color: #fff !important;
+    }
+
+    .profile-text,
+    .profile-chevron {
+        display: none !important;
+    }
+
+    .profile-photo,
+    .profile-initial {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 10px !important;
+        border-color: rgba(255, 255, 255, .45) !important;
+    }
+
+    .main-content,
+    .main-content.expanded {
+        margin-left: 0 !important;
+        padding-bottom: 112px !important;
+    }
+
+    .mobile-bottom-nav {
+        display: flex !important;
+        align-items: center;
+        grid-template-columns: none !important;
+        gap: 6px !important;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 7px !important;
+        scroll-snap-type: x proximity;
+        scrollbar-width: thin;
+    }
+
+    .mobile-bottom-link {
+        flex: 0 0 78px;
+        min-width: 78px !important;
+        max-width: 88px;
+        min-height: 54px !important;
+        padding: 6px 5px;
+        scroll-snap-align: start;
+    }
+
+    .mobile-bottom-link span {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mobile-bottom-link i {
+        font-size: 19px !important;
+    }
+}

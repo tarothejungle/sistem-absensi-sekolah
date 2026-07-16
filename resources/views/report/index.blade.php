@@ -2,32 +2,14 @@
 
 @section('content')
 @php
-    $attendancePhotoUrl = function (?string $path) {
-        if (!$path) {
+    $attendancePhotoUrl = function ($attendance, string $type) {
+        $column = $type === 'check-out' ? 'check_out_face_photo' : 'check_in_face_photo';
+
+        if (!$attendance->{$column}) {
             return null;
         }
 
-        $normalized = str_replace('\\', '/', trim($path));
-
-        if (preg_match('#^https?://#i', $normalized)) {
-            return $normalized;
-        }
-
-        $normalized = ltrim($normalized, '/');
-
-        if (str_starts_with($normalized, 'public/storage/')) {
-            $normalized = substr($normalized, strlen('public/'));
-        }
-
-        if (str_starts_with($normalized, 'storage/')) {
-            return asset($normalized);
-        }
-
-        if (str_starts_with($normalized, 'public/')) {
-            $normalized = substr($normalized, strlen('public/'));
-        }
-
-        return asset('storage/' . $normalized);
+        return route('attendance.photo.show', [$attendance, $type]);
     };
 @endphp
 
@@ -62,14 +44,54 @@
 
     @media (max-width: 768px) {
         .report-action-buttons {
-            width: 100%;
-            justify-content: flex-start;
-            margin-bottom: 14px;
+            display: block !important;
+            padding: 12px !important;
+            margin-top: 0 !important;
+            margin-bottom: 14px !important;
+            justify-content: stretch !important;
+            overflow: hidden;
         }
 
-        .btn-report-action {
-            min-width: 100px;
+        .report-action-buttons .btn-report-action,
+        .report-action-buttons > * {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+
+        .report-action-buttons {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 10px !important;
+            align-items: stretch !important;
+        }
+
+        .report-action-buttons > * {
+            flex: 0 0 auto !important;
+        }
+
+        .report-action-buttons .btn-report-action {
+            display: inline-flex !important;
+            min-width: 0 !important;
             height: 42px;
+            padding: 8px 6px !important;
+            font-size: 12px !important;
+            gap: 4px !important;
+            margin: 0 !important;
+            overflow: hidden;
+        }
+
+        .report-action-buttons .btn-report-action span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .report-action-buttons .btn-report-action i {
+            font-size: 14px;
+            margin-right: 0 !important;
+            flex: 0 0 auto;
         }
 
         #attendanceStatusChart {
@@ -98,7 +120,7 @@
             class="btn btn-success btn-report-action"
         >
             <i class="bi bi-file-earmark-excel-fill"></i>
-            <span>Export Excel</span>
+            <span>Excel</span>
         </a>
 
         <a
@@ -107,7 +129,7 @@
             target="_blank"
         >
             <i class="bi bi-file-earmark-pdf-fill"></i>
-            <span>Export PDF</span>
+            <span>PDF</span>
         </a>
     </div>
 
@@ -194,8 +216,8 @@
                 <tbody>
                     @forelse($attendances as $attendance)
                         @php
-                            $checkInPhotoUrl = $attendancePhotoUrl($attendance->check_in_face_photo);
-                            $checkOutPhotoUrl = $attendancePhotoUrl($attendance->check_out_face_photo);
+                            $checkInPhotoUrl = $attendancePhotoUrl($attendance, 'check-in');
+                            $checkOutPhotoUrl = $attendancePhotoUrl($attendance, 'check-out');
                         @endphp
                         <tr>
                             <td>

@@ -81,7 +81,7 @@
                             </div>
                         </div>
 
-                        <form method="POST" action="{{ route('attendance.checkin') }}" class="mt-3 absensi-form">
+                        <form method="POST" action="{{ route('attendance.checkin') }}" class="mt-3 absensi-form" data-no-loading="true">
                             @csrf
                             <input type="hidden" name="attendance_session_id" value="{{ $session->id }}">
                             <input type="hidden" name="latitude">
@@ -93,7 +93,7 @@
                             </button>
                         </form>
 
-                        <form method="POST" action="{{ route('attendance.checkout') }}" class="mt-2 absensi-form">
+                        <form method="POST" action="{{ route('attendance.checkout') }}" class="mt-2 absensi-form" data-no-loading="true">
                             @csrf
                             <input type="hidden" name="attendance_session_id" value="{{ $session->id }}">
                             <input type="hidden" name="latitude">
@@ -168,5 +168,5 @@
 @endsection
 
 @push('scripts')
-    <script src="{{ asset('js/attendance.js') }}?v=4.0.5"></script>
+    <script src="{{ asset('js/attendance.js') }}?v=4.1.0"></script>
 @endpush

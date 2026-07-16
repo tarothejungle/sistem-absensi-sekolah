@@ -48,16 +48,43 @@ class AttendanceSessionController extends Controller
             ->with('success', 'Sesi absensi berhasil diperbarui.');
     }
 
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'session_ids' => 'required|array|min:1',
+            'session_ids.*' => 'exists:attendance_sessions,id',
+        ]);
+
+        $sessions = AttendanceSession::withCount('teachers')
+            ->whereIn('id', $data['session_ids'])
+            ->get();
+
+        if ($sessions->isEmpty()) {
+            return back()->with('error', 'Pilih sesi absensi yang ingin dihapus.');
+        }
+
+        $blockedSessions = $sessions->where('teachers_count', '>', 0);
+
+        if ($blockedSessions->isNotEmpty()) {
+            return back()->with('error', 'Sebagian sesi masih digunakan oleh guru, jadi tidak bisa dihapus massal.');
+        }
+
+        AttendanceSession::whereIn('id', $sessions->pluck('id'))->delete();
+
+        return back()->with('success', 'Sesi absensi terpilih berhasil dihapus.');
+    }
+
     public function destroy(AttendanceSession $session)
     {
         if ($session->teachers()->count() > 0) {
             return back()->with('error', 'Sesi tidak dapat dihapus karena masih digunakan oleh guru.');
         }
-
+ 
         $session->delete();
-
+ 
         return back()->with('success', 'Sesi absensi berhasil dihapus.');
     }
+
 
     public function toggle(AttendanceSession $session)
     {

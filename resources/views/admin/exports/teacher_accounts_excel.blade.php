@@ -3,6 +3,7 @@
         <tr>
             <th>Username</th>
             <th>Nama Guru</th>
+            <th>Role</th>
             <th>Email</th>
             <th>Jabatan</th>
             <th>Mata Pelajaran</th>
@@ -13,15 +14,16 @@
     <tbody>
         @foreach($teachers as $teacher)
             <tr>
-                <td>{{ $teacher->user->nip ?? '-' }}</td>
-                <td>{{ $teacher->nama_lengkap ?? '-' }}</td>
-                <td>{{ $teacher->user->email ?? $teacher->email ?? '-' }}</td>
-                <td>{{ $teacher->jabatan ?? '-' }}</td>
-                <td>{{ $teacher->mata_pelajaran ?? '-' }}</td>
+                <td>{{ \App\Support\ExcelCell::escape($teacher->user->nip ?? '-') }}</td>
+                <td>{{ \App\Support\ExcelCell::escape($teacher->nama_lengkap ?? '-') }}</td>
+                <td>{{ \App\Support\ExcelCell::escape(\App\Models\Teacher::dataGuruRoleLabel($teacher->user->role ?? null)) }}</td>
+                <td>{{ \App\Support\ExcelCell::escape($teacher->user->email ?? '-') }}</td>
+                <td>{{ \App\Support\ExcelCell::escape($teacher->jabatan ?? '-') }}</td>
+                <td>{{ \App\Support\ExcelCell::escape($teacher->mata_pelajaran ?? '-') }}</td>
                 <td>
                     @if($teacher->attendanceSessions && $teacher->attendanceSessions->count() > 0)
                         @foreach($teacher->attendanceSessions as $session)
-                            {{ $session->nama_sesi }} 
+                            {{ \App\Support\ExcelCell::escape($session->nama_sesi) }}
                             ({{ substr($session->jam_masuk, 0, 5) }} - {{ substr($session->jam_pulang, 0, 5) }})
                             @if(!$loop->last), @endif
                         @endforeach

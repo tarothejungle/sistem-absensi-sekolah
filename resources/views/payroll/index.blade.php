@@ -1,6 +1,29 @@
 @extends('layouts.app')
 
 @section('content')
+<style>
+    .payroll-form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        align-items: end;
+    }
+    .payroll-form-col {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .payroll-form-col .btn {
+        white-space: nowrap;
+    }
+    @media (max-width: 768px) {
+        .payroll-form-col:nth-child(1) { order: 1; }
+        .payroll-form-col:nth-child(2) { order: 2; }
+        .payroll-form-col:nth-child(3) { order: 3; grid-column: 1 / -1; }
+        .payroll-form-col:nth-child(4) { order: 4; grid-column: 1 / -1; }
+    }
+</style>
+
 @php
     $summary = $summaryPeriod?->items;
     $totalGajiPokok = $summary ? $summary->sum('gaji_pokok') : 0;
@@ -17,12 +40,6 @@
         </div>
     </div>
 
-    <div class="ui-page-action-row">
-        <a href="{{ route('payroll.settings') }}" class="btn btn-primary">
-            <i class="bi bi-gear-fill me-1"></i> Pengaturan Gaji Guru
-        </a>
-    </div>
-
     <div class="card border-0 shadow-sm mb-3 ui-filter-card">
         <div class="card-body">
             <form
@@ -36,23 +53,28 @@
                 data-confirm-submit="Hitung Ulang"
             >
                 @csrf
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-5">
-                        <label class="form-label fw-semibold">Bulan</label>
+                <div class="payroll-form-grid">
+                    <div class="payroll-form-col">
+                        <label class="form-label fw-semibold mb-0">Bulan</label>
                         <select name="bulan" class="form-select" required>
                             @foreach($monthNames as $num => $name)
                                 <option value="{{ $num }}" {{ (int) $selectedMonth === (int) $num ? 'selected' : '' }}>{{ $name }}</option>
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">Tahun</label>
+                    <div class="payroll-form-col">
+                        <label class="form-label fw-semibold mb-0">Tahun</label>
                         <input type="number" name="tahun" class="form-control" value="{{ $selectedYear }}" min="2020" max="2100" required>
                     </div>
-                    <div class="col-md-3 d-flex justify-content-md-end gap-2">
+                    <div class="payroll-form-col">
                         <button type="submit" class="btn btn-success">
-                            <i class="bi bi-calculator-fill me-1"></i> Generate / Hitung Ulang
+                            <i class="bi bi-calculator-fill me-1"></i> Generate Gaji
                         </button>
+                    </div>
+                    <div class="payroll-form-col">
+                        <a href="{{ route('payroll.settings') }}" class="btn btn-primary">
+                            <i class="bi bi-gear-fill me-1"></i> Pengaturan Gaji Guru
+                        </a>
                     </div>
                 </div>
             </form>

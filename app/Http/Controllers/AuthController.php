@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use App\Models\LoginActivity;
 
 class AuthController extends Controller
@@ -14,24 +16,96 @@ class AuthController extends Controller
     }
 
     public function login(Request $request)
-{
-    $credentials = $request->validate([
-        'nip' => 'required',
-        'password' => 'required',
-    ]);
+    {
+        $validated = $request->validate([
+            'nip' => ['required', 'string'],
+            'password' => ['required', 'string'],
+            'cf-turnstile-response' => ['required', 'string'],
+        ], [
+            'nip.required' => 'Username wajib diisi.',
+            'password.required' => 'Password wajib diisi.',
+            'cf-turnstile-response.required' =>
+                'Silakan selesaikan verifikasi keamanan terlebih dahulu.',
+        ]);
 
-    $remember = $request->boolean('remember');
+        try {
+            $response = Http::asForm()
+                ->connectTimeout(5)
+                ->timeout(10)
+                ->post(
+                    'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+                    [
+                        'secret' => config('services.turnstile.secret_key'),
+                        'response' => $request->input('cf-turnstile-response'),
+                        'remoteip' => $request->ip(),
+                    ]
+                );
 
-    $loginSuccess = Auth::attempt([
-        'nip' => $credentials['nip'],
-        'password' => $credentials['password'],
-        'status' => 'aktif',
-    ], $remember);
+            $result = $response->successful()
+                ? $response->json()
+                : [];
+        } catch (\Throwable $exception) {
+            report($exception);
 
-    if ($loginSuccess) {
+            throw ValidationException::withMessages([
+                'cf-turnstile-response' =>
+                    'Layanan verifikasi keamanan sedang tidak dapat dihubungi. Silakan coba kembali.',
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Validasi hasil Turnstile
+        |--------------------------------------------------------------------------
+        */
+
+        $turnstileValid = ($result['success'] ?? false) === true;
+
+        if (app()->environment('production')) {
+            $turnstileValid =
+                $turnstileValid
+                && ($result['hostname'] ?? null)
+                    === config('services.turnstile.hostname')
+                && ($result['action'] ?? null) === 'login';
+        }
+
+        if (! $turnstileValid) {
+            logger()->warning('Turnstile validation failed', [
+                'hostname' => $result['hostname'] ?? null,
+                'action' => $result['action'] ?? null,
+                'error_codes' => $result['error-codes'] ?? [],
+                'ip_address' => $request->ip(),
+            ]);
+
+            throw ValidationException::withMessages([
+                'cf-turnstile-response' =>
+                    'Verifikasi keamanan gagal atau telah kedaluwarsa. Silakan coba kembali.',
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Proses autentikasi
+        |--------------------------------------------------------------------------
+        */
+
+        $loginSuccess = Auth::attempt([
+            'nip' => $validated['nip'],
+            'password' => $validated['password'],
+            'status' => 'aktif',
+        ], $request->boolean('remember'));
+
+        if (! $loginSuccess) {
+            return back()
+                ->withErrors([
+                    'nip' => 'Username atau password tidak sesuai.',
+                ])
+                ->onlyInput('nip');
+        }
+
         $request->session()->regenerate();
 
-        $user = auth()->user();
+        $user = Auth::user();
 
         $user->update([
             'last_login' => now(),
@@ -41,7 +115,7 @@ class AuthController extends Controller
             'user_id' => $user->id,
             'name' => $user->name ?? $user->nip,
             'role' => $user->role,
-            'activity' => 'login kedalam aplikasi',
+            'activity' => 'login ke dalam aplikasi',
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
@@ -50,13 +124,6 @@ class AuthController extends Controller
             ->route('dashboard')
             ->with('success', 'Login berhasil.');
     }
-
-    return back()
-        ->withErrors([
-            'nip' => 'NIP atau password tidak sesuai.',
-        ])
-        ->onlyInput('nip');
-}
 
     public function logout(Request $request)
     {

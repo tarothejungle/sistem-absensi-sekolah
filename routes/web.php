@@ -19,20 +19,24 @@ use App\Http\Controllers\DutyScheduleController;
 
 Route::get('/', fn () => redirect()->route('login'));
 
-Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.process');
+Route::get('/login', [AuthController::class, 'showLogin'])->middleware('guest')->name('login');
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('throttle:5,1')
+    ->name('login.process');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])
     ->name('password.request');
 
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])
+    ->middleware('throttle:5,1')
     ->name('password.email');
 
 Route::get('/reset-password/{token}', [PasswordResetController::class, 'showResetForm'])
     ->name('password.reset');
 
 Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])
+    ->middleware('throttle:5,1')
     ->name('password.update');
 
 Route::middleware('auth')->group(function () {
@@ -41,6 +45,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.readAll');
 
     Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::get('/attendance/photos/{attendance}/{type}', [AttendanceController::class, 'photo'])
+        ->whereIn('type', ['check-in', 'check-out'])
+        ->name('attendance.photo.show');
     Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])->name('attendance.checkin');
     Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('attendance.checkout');
 
@@ -77,6 +84,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/admin/teachers', [AdminController::class, 'storeTeacher'])->name('admin.teachers.store');
         Route::get('/admin/teachers/{teacher}/edit', [AdminController::class, 'editTeacher'])->name('admin.teachers.edit');
         Route::put('/admin/teachers/{teacher}', [AdminController::class, 'updateTeacher'])->name('admin.teachers.update');
+        Route::delete('/admin/teachers/bulk-delete', [AdminController::class, 'bulkDeleteTeachers'])->name('admin.teachers.bulk-delete');
         Route::delete('/admin/teachers/{teacher}', [AdminController::class, 'deleteTeacher'])->name('admin.teachers.delete');
         Route::get('/admin/teachers/export/excel', [AdminController::class, 'exportTeacherAccountsExcel'])->name('admin.teachers.export.excel');
         Route::get('/admin/teachers/export/pdf', [AdminController::class, 'exportTeacherAccountsPdf'])->name('admin.teachers.export.pdf');
@@ -87,6 +95,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/admin/users/{user}/edit', [AdminController::class, 'editUser'])->name('admin.users.edit');
         Route::put('/admin/users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
         Route::patch('/admin/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus'])->name('admin.users.toggle-status');
+        Route::delete('/admin/users/bulk-delete', [AdminController::class, 'bulkDeleteUsers'])->name('admin.users.bulk-delete');
         Route::delete('/admin/users/{user}', [AdminController::class, 'deleteUser'])->name('admin.users.delete');
 
         Route::get('/admin/location', [AdminController::class, 'editLocation'])->name('admin.location');
@@ -109,6 +118,9 @@ Route::middleware('auth')->group(function () {
 
         Route::patch('/admin/attendance-sessions/{session}/toggle', [AttendanceSessionController::class, 'toggle'])
             ->name('admin.attendance-sessions.toggle');
+
+        Route::delete('/admin/attendance-sessions/bulk-delete', [AttendanceSessionController::class, 'bulkDestroy'])
+            ->name('admin.attendance-sessions.bulk-destroy');
 
         Route::delete('/admin/attendance-sessions/{session}', [AttendanceSessionController::class, 'destroy'])
             ->name('admin.attendance-sessions.destroy');

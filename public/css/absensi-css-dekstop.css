@@ -1,0 +1,285 @@
+/* Desktop-only styling extracted from absensi-ui-final.css */
+/* =====================================================
+   ABSENSI GURU - DESKTOP UI/UX POLISH
+   Khusus desktop/tablet besar. Tidak mengubah logic Laravel.
+===================================================== */
+:root{
+    --navy:#07166b;
+    --navy-2:#0b2aa5;
+    --blue:#1f74ff;
+    --sky:#eaf2ff;
+    --ink:#07152f;
+    --muted:#667085;
+    --line:#dce6f5;
+    --card:#ffffff;
+    --soft:#f5f8ff;
+    --success:#158f5b;
+    --danger:#e1324d;
+    --warning:#ffb719;
+    --radius-lg:28px;
+    --radius-md:20px;
+    --shadow:0 24px 70px rgba(7, 22, 107, .12);
+    --shadow-sm:0 14px 34px rgba(15, 23, 42, .08);
+}
+html{scroll-behavior:smooth;}
+body{
+    background:
+        radial-gradient(circle at 12% 0%, rgba(31,116,255,.14), transparent 340px),
+        radial-gradient(circle at 96% 8%, rgba(7,22,107,.10), transparent 360px),
+        linear-gradient(180deg,#fbfdff 0%,#f3f7ff 100%) !important;
+    color:var(--ink) !important;
+}
+body::before{
+    content:'';
+    position:fixed;
+    inset:0;
+    z-index:-1;
+    pointer-events:none;
+    background-image:
+        linear-gradient(rgba(7,22,107,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(7,22,107,.035) 1px, transparent 1px);
+    background-size:42px 42px;
+    mask-image:linear-gradient(180deg, rgba(0,0,0,.48), transparent 78%);
+}
+.topbar{
+    height:76px !important;
+    padding:0 28px !important;
+    background:linear-gradient(115deg,#06105a 0%,#081b86 48%,#1769ff 100%) !important;
+    box-shadow:0 18px 48px rgba(7,22,107,.28) !important;
+    border-bottom:1px solid rgba(255,255,255,.14);
+}
+.topbar-title{
+    font-size:23px !important;
+    font-weight:900 !important;
+    letter-spacing:-.3px !important;
+}
+.brand-toggle{
+    height:52px !important;
+    min-width:190px !important;
+    border-radius:18px !important;
+    background:rgba(255,255,255,.96) !important;
+    box-shadow:0 16px 36px rgba(0,0,0,.16) !important;
+    border:1px solid rgba(255,255,255,.55) !important;
+}
+.brand-logo{width:42px !important;height:42px !important;}
+.brand-text{font-weight:800 !important;color:var(--navy) !important;}
+.profile-button{
+    padding:8px 10px 8px 16px !important;
+    border-radius:18px !important;
+    background:rgba(255,255,255,.10) !important;
+    border:1px solid rgba(255,255,255,.18) !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.12);
+}
+.profile-button:hover{background:rgba(255,255,255,.16) !important;}
+.profile-name{font-weight:800 !important;}
+.profile-role{opacity:.95 !important;}
+.profile-photo,.profile-initial{width:46px !important;height:46px !important;}
+.profile-dropdown{
+    top:66px !important;
+    border:1px solid rgba(220,230,245,.95) !important;
+    border-radius:18px !important;
+    box-shadow:0 24px 60px rgba(15,23,42,.18) !important;
+}
+.app-sidebar{
+    top:76px !important;
+    width:250px !important;
+    background:rgba(255,255,255,.93) !important;
+    backdrop-filter:blur(18px);
+    border-right:1px solid rgba(220,230,245,.95) !important;
+    box-shadow:18px 0 48px rgba(15,23,42,.07) !important;
+}
+.app-sidebar.collapsed{width:86px !important;}
+.sidebar-menu{padding:18px 10px !important;}
+.sidebar-link{
+    min-height:54px;
+    border-radius:18px !important;
+    padding:14px 16px !important;
+    margin-bottom:8px !important;
+    color:#0a1c75 !important;
+    font-weight:750 !important;
+    letter-spacing:-.1px;
+    transition:all .18s ease !important;
+}
+.sidebar-link i{
+    width:28px !important;
+    height:28px !important;
+    min-width:28px !important;
+    border-radius:10px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:#eef5ff;
+    color:var(--navy);
+}
+.sidebar-link:hover{
+    background:#eef5ff !important;
+    transform:translateX(4px);
+}
+.sidebar-link.active{
+    color:#fff !important;
+    background:linear-gradient(135deg,#07166b 0%,#0b2aa5 100%) !important;
+    box-shadow:0 18px 32px rgba(7,22,107,.22) !important;
+}
+.sidebar-link.active i{background:rgba(255,255,255,.16);color:#fff;}
+.main-content{
+    margin-top:76px !important;
+    margin-left:250px !important;
+    padding:38px 54px !important;
+}
+.main-content.expanded{margin-left:86px !important;}
+.container-fluid{max-width:1280px !important;}
+.ui-page-hero,.page-header{
+    position:relative !important;
+    overflow:hidden !important;
+    min-height:118px !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:space-between !important;
+    gap:22px !important;
+    padding:28px 30px !important;
+    margin-bottom:24px !important;
+    border-radius:30px !important;
+    background:
+        linear-gradient(135deg, rgba(7,22,107,.98), rgba(16,55,193,.96) 58%, rgba(31,116,255,.96)),
+        radial-gradient(circle at right top, rgba(255,255,255,.28), transparent 270px) !important;
+    box-shadow:var(--shadow) !important;
+    border:1px solid rgba(255,255,255,.18) !important;
+}
+.ui-page-hero::before,.page-header::before{
+    content:'' !important;
+    position:absolute !important;
+    right:96px !important;
+    top:-64px !important;
+    width:220px !important;
+    height:220px !important;
+    border-radius:999px !important;
+    background:rgba(255,255,255,.16) !important;
+}
+.ui-page-hero::after,.page-header::after{
+    content:'' !important;
+    position:absolute !important;
+    right:-60px !important;
+    bottom:-86px !important;
+    width:260px !important;
+    height:260px !important;
+    border-radius:999px !important;
+    background:rgba(255,255,255,.14) !important;
+}
+.ui-page-hero > *, .page-header > *{position:relative;z-index:2;}
+.ui-page-hero h1,.ui-page-hero h2,.ui-page-hero h3,.page-header h1,.page-header h2,.page-header h3{
+    font-size:30px !important;
+    font-weight:900 !important;
+    letter-spacing:-.8px !important;
+    color:#fff !important;
+    margin:0 !important;
+}
+.ui-page-hero p,.page-header p{
+    margin:8px 0 0 !important;
+    color:rgba(255,255,255,.88) !important;
+    font-weight:500 !important;
+}
+.ui-page-hero .btn,.ui-page-hero .btn-add-primary,.page-header .btn,.page-header .btn-add-primary{
+    margin-left:auto !important;
+    white-space:nowrap;
+}
+.card,.ui-card{
+    border:1px solid rgba(220,230,245,.95) !important;
+    border-radius:24px !important;
+    background:rgba(255,255,255,.92) !important;
+    box-shadow:var(--shadow-sm) !important;
+    overflow:hidden;
+}
+.card-body{padding:26px !important;}
+.ui-toolbar{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:space-between !important;
+    gap:14px !important;
+    padding:0 !important;
+    margin:0 0 18px !important;
+    background:transparent !important;
+    border:none !important;
+    box-shadow:none !important;
+}
+.ui-actions{display:flex;gap:10px;flex-wrap:wrap;}
+.btn,.btn-add-primary{
+    min-height:42px;
+    border-radius:15px !important;
+    font-weight:850 !important;
+    letter-spacing:-.2px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    border:none !important;
+    box-shadow:0 12px 24px rgba(15,23,42,.11) !important;
+}
+.btn-sm{min-height:34px !important;border-radius:13px !important;padding:6px 11px !important;}
+.btn-primary,.btn-add-primary {
+    background:#001362 !important;
+    border-color:#001362 !important;
+    color:#fff !important;}
+.btn-success{background:linear-gradient(135deg,#12814f,#17a56a) !important;color:#fff !important;}
+.btn-danger{background:linear-gradient(135deg,#d92f48,#f0445f) !important;color:#fff !important;}
+.btn-warning{background:linear-gradient(135deg,#ffb719,#ffd45d) !important;color:#111827 !important;}
+.btn-secondary{background:#667085 !important;color:#fff !important;}
+.btn-outline-secondary{border:1px solid #cbd5e1 !important;background:#fff !important;box-shadow:none !important;color:#334155 !important;}
+.btn:hover{transform:translateY(-1px);}
+.table-responsive-mobile{border-radius:18px;}
+.table{
+    border-collapse:separate !important;
+    border-spacing:0 !important;
+    border-color:#dce6f5 !important;
+    margin-bottom:0 !important;
+    --bs-table-striped-bg:#f7faff !important;
+}
+.table thead th{
+    background:linear-gradient(180deg,#eef5ff,#e7f0ff) !important;
+    color:#07166b !important;
+    font-weight:900 !important;
+    font-size:14px;
+    border-bottom:1px solid #dce6f5 !important;
+}
+.table td,.table th{padding:15px 14px !important;vertical-align:middle !important;}
+.table tbody tr{transition:background .15s ease;}
+.table tbody tr:hover td{background:#fbfdff !important;}
+.badge{
+    border-radius:999px !important;
+    padding:7px 10px !important;
+    font-weight:850 !important;
+    letter-spacing:-.1px;
+}
+.bg-primary{background:#1f74ff !important;}
+.bg-success{background:#158f5b !important;}
+.bg-danger{background:#e1324d !important;}
+.bg-warning{background:#ffbf22 !important;}
+.form-label,label{font-weight:800 !important;color:#152447 !important;}
+.form-control,.form-select{
+    min-height:48px !important;
+    border-radius:16px !important;
+    border:1px solid #d9e4f4 !important;
+    background:#fbfdff !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.65) !important;
+}
+.form-control:focus,.form-select:focus{
+    border-color:#1f74ff !important;
+    box-shadow:0 0 0 .24rem rgba(31,116,255,.14) !important;
+}
+.alert{border-radius:18px !important;box-shadow:var(--shadow-sm) !important;}
+.ui-empty-state{
+    border:1px dashed #b9c7dc !important;
+    background:linear-gradient(180deg,#ffffff,#f7faff) !important;
+    border-radius:24px !important;
+}
+/* Dashboard */
+.dashboard-hero{
+    border-radius:30px;
+    padding:28px 30px;
+    color:#fff;
+    background:linear-gradient(135deg,#07166b,#1144d8 62%,#1f74ff);
+    box-shadow:var(--shadow);
+    position:relative;
+    overflow:hidden;
+    margin-bottom:24px;
+}
+.dashboard-hero::after{content:'';position:absolute;right:-90px;top:-85px;width:260px;height:260px;border-radius:999px;background:rgba(255,255,255,.16);}

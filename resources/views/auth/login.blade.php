@@ -48,19 +48,25 @@
                 <img src="{{ asset('images/logo-MI.png') }}" alt="Logo MI" class="login-logo">
 
                 <div class="login-title">
-                    Login Sistem Absensi Sekolah<br>MI Lantaburo
+                    Sistem Absensi Guru<br>MI Lantaburo
                 </div>
 
                 @if(session('success'))
-                    <div class="alert alert-success">{{ session('success') }}</div>
+                    <div class="alert alert-success">
+                        {{ session('success') }}
+                    </div>
                 @endif
 
                 @if(session('error'))
-                    <div class="alert alert-danger">{{ session('error') }}</div>
+                    <div class="alert alert-danger">
+                        {{ session('error') }}
+                    </div>
                 @endif
 
-                @if($errors->any())
-                    <div class="alert alert-danger">Username atau password tidak sesuai.</div>
+                @if($errors->has('nip') || $errors->has('password'))
+                    <div class="alert alert-danger">
+                        {{ $errors->first('nip') ?: $errors->first('password') }}
+                    </div>
                 @endif
 
                 <form action="{{ route('login.process') }}" method="POST">
@@ -90,7 +96,30 @@
                         <a href="{{ route('password.request') }}" class="forgot-link">Lupa Password?</a>
                     </div>
 
-                    <button type="submit" class="btn btn-login text-white w-100">
+                    <div class="mb-1">
+                        <div
+                            class="cf-turnstile"
+                            data-sitekey="{{ config('services.turnstile.site_key') }}"
+                            data-theme="auto"
+                            data-size="flexible"
+                            data-action="login"
+                            data-callback="turnstileSuccess"
+                            data-expired-callback="turnstileExpired"
+                            data-error-callback="turnstileError">
+                        </div>
+
+                        @error('cf-turnstile-response')
+                            <div class="text-danger small mt-2">
+                                {{ $message }}
+                            </div>
+                        @enderror
+                    </div>
+
+                    <button
+                        type="submit"
+                        id="loginButton"
+                        class="btn btn-login text-white w-100"
+                        disabled>
                         <i class="bi bi-box-arrow-in-right"></i>
                         Login
                     </button>
@@ -114,6 +143,39 @@
                 passwordIcon.classList.add('bi-eye');
             }
         }
+    </script>
+
+    <script>
+        function turnstileSuccess(token) {
+            const button = document.getElementById('loginButton');
+
+            if (button) {
+                button.disabled = false;
+            }
+        }
+
+        function turnstileExpired() {
+            const button = document.getElementById('loginButton');
+
+            if (button) {
+                button.disabled = true;
+            }
+        }
+
+        function turnstileError(errorCode) {
+            console.error('Turnstile error:', errorCode);
+
+            const button = document.getElementById('loginButton');
+
+            if (button) {
+                button.disabled = true;
+            }
+        }
+    </script>
+
+    <script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        defer>
     </script>
 </body>
 </html>

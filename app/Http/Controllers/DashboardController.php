@@ -46,7 +46,16 @@ class DashboardController extends Controller
             ];
 
             if ($role === 'kepala_sekolah') {
-                $data['rekapHariIni'] = $dailyAttendance->syncForDate($today);
+                $rekapHariIni = $dailyAttendance->syncForDate($today);
+                $guruBelumAbsenHariIni = $dailyAttendance->missingAttendanceTeachersForDate(
+                    $today,
+                    null,
+                    $rekapHariIni
+                );
+
+                $data['rekapHariIni'] = $rekapHariIni;
+                $data['guruBelumAbsenHariIni'] = $guruBelumAbsenHariIni;
+                $data['belumAbsenHariIni'] = $guruBelumAbsenHariIni->count();
             }
 
             return view('dashboard.index', $data);
@@ -60,14 +69,18 @@ class DashboardController extends Controller
 
         // Sekaligus membuat status otomatis untuk sakit/izin/cuti/tugas luar/alfa bila syaratnya terpenuhi.
         $rekapHariIni = $dailyAttendance->syncForDate($today);
+        $guruBelumAbsenHariIni = $dailyAttendance->missingAttendanceTeachersForDate(
+            $today,
+            $expectedTeachers,
+            $rekapHariIni
+        );
 
         $hadirHariIni = $rekapHariIni->where('status_kehadiran', 'hadir')->unique('teacher_id')->count();
         $terlambatHariIni = $rekapHariIni->where('status_kehadiran', 'terlambat')->unique('teacher_id')->count();
         $tidakLengkapHariIni = $rekapHariIni->where('status_kehadiran', 'hadir_tidak_lengkap')->unique('teacher_id')->count();
 
         // Belum absen dihitung dari guru yang memang wajib absen hari ini, bukan total guru aktif.
-        $guruYangSudahAdaStatus = $rekapHariIni->pluck('teacher_id')->unique()->count();
-        $belumAbsenHariIni = max($expectedTeachers->count() - $guruYangSudahAdaStatus, 0);
+        $belumAbsenHariIni = $guruBelumAbsenHariIni->count();
 
         // AKTIVITAS LOGIN USER
         $loginActivities = LoginActivity::latest()
@@ -81,6 +94,7 @@ class DashboardController extends Controller
             'terlambatHariIni' => $terlambatHariIni,
             'tidakLengkapHariIni' => $tidakLengkapHariIni,
             'belumAbsenHariIni' => $belumAbsenHariIni,
+            'guruBelumAbsenHariIni' => $guruBelumAbsenHariIni,
             'rekapHariIni' => $rekapHariIni,
             'loginActivities' => $loginActivities,
         ]);

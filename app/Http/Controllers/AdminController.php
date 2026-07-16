@@ -10,7 +10,10 @@ use App\Models\User;
 use App\Models\WorkSchedule;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Maatwebsite\Excel\Facades\Excel;
 
 class AdminController extends Controller
@@ -24,10 +27,10 @@ class AdminController extends Controller
 
         $teachers = Teacher::with(['user', 'attendanceSessions', 'schedules'])
             ->whereHas('user', function ($query) {
-                $query->whereIn('role', ['guru']);
+                $query->whereIn('role', Teacher::DATA_GURU_ROLES);
             })
             ->when($keyword, function ($query) use ($keyword) {
-                $query->where('nama_lengkap', 'like', '%' . $keyword . '%');
+                $query->where('nama_lengkap', 'like', '%'.$keyword.'%');
             })
             ->orderBy('nama_lengkap')
             ->paginate(7)
@@ -49,68 +52,55 @@ class AdminController extends Controller
 
     public function storeTeacher(Request $request)
     {
-        $existingUser = User::where('nip', $request->nip)
-            ->orWhere('email', $request->email)
-            ->first();
-
         $data = $request->validate([
-            'nip' => 'required|string|max:30',
+            'nip' => ['required', 'string', 'max:30', 'unique:users,nip'],
+            'role' => ['required', Rule::in(Teacher::DATA_GURU_ROLES)],
             'attendance_session_ids' => 'required|array',
             'attendance_session_ids.*' => 'exists:attendance_sessions,id',
             'attendance_days' => 'required|array|min:1',
-            'attendance_days.*' => 'in:' . implode(',', $this->days),
-            'password' => $existingUser ? 'nullable|string|min:5' : 'required|string|min:6',
+            'attendance_days.*' => 'in:'.implode(',', $this->days),
+            'password' => ['required', 'string', $this->strongPasswordRule()],
             'nama_lengkap' => 'required|string|max:100',
-            'jenis_kelamin' => 'nullable|in:L,P',
+            'jenis_kelamin' => 'required|in:L,P',
             'no_hp' => 'nullable|string|max:20',
-            'email' => 'required|email|max:150',
-            'jabatan' => 'nullable|string|max:100',
+            'email' => 'required|email|max:150|unique:users,email',
+            'jabatan' => 'required|in:Kepala Sekolah,Bendahara,Operator, Guru Kelas,Guru Bidang',
             'mata_pelajaran' => 'nullable|string|max:100',
         ]);
 
-        if ($existingUser) {
-            $user = $existingUser;
-
-            $teacherSudahAda = Teacher::where('user_id', $user->id)->first();
-
-            if ($teacherSudahAda) {
-                return back()
-                    ->withInput()
-                    ->with('error', 'Data guru untuk akun ini sudah tersedia.');
-            }
-        } else {
-            $user = User::create([
+        DB::transaction(function () use ($data): void {
+            $user = new User([
                 'nip' => $data['nip'],
                 'name' => $data['nama_lengkap'],
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
-                'role' => 'guru',
-                'status' => 'aktif',
             ]);
-        }
+            $user->role = $data['role'];
+            $user->status = 'aktif';
+            $user->save();
 
-        $teacher = Teacher::create([
-            'user_id' => $user->id,
-            'nip' => $data['nip'],
-            'attendance_session_id' => $data['attendance_session_ids'][0] ?? null,
-            'nama_lengkap' => $data['nama_lengkap'],
-            'jenis_kelamin' => $data['jenis_kelamin'] ?? null,
-            'no_hp' => $data['no_hp'] ?? null,
-            'email' => $data['email'],
-            'jabatan' => $data['jabatan'] ?? null,
-            'mata_pelajaran' => $data['mata_pelajaran'] ?? null,
-        ]);
+            $teacher = Teacher::create([
+                'user_id' => $user->id,
+                'nama_lengkap' => $data['nama_lengkap'],
+                'jenis_kelamin' => $data['jenis_kelamin'],
+                'no_hp' => $data['no_hp'] ?? null,
+                'jabatan' => $data['jabatan'],
+                'mata_pelajaran' => $data['mata_pelajaran'] ?? null,
+            ]);
 
-        $teacher->attendanceSessions()->sync($data['attendance_session_ids']);
-        $this->syncTeacherWorkSchedules($teacher, $data['attendance_days']);
+            $teacher->attendanceSessions()->sync($data['attendance_session_ids']);
+            $this->syncTeacherWorkSchedules($teacher, $data['attendance_days']);
+        });
 
         return redirect()
-            ->route('admin.teachers')
+            ->route('admin.teachers', $request->only(['page', 'keyword']))
             ->with('success', 'Data guru berhasil ditambahkan.');
     }
 
     public function editTeacher(Teacher $teacher)
     {
+        abort_unless(in_array($teacher->user?->role, Teacher::DATA_GURU_ROLES, true), 404);
+
         $teacher->load(['attendanceSessions', 'schedules']);
 
         $sessions = AttendanceSession::where('status', 'aktif')
@@ -122,41 +112,46 @@ class AdminController extends Controller
 
     public function updateTeacher(Request $request, Teacher $teacher)
     {
+        abort_unless(in_array($teacher->user?->role, Teacher::DATA_GURU_ROLES, true), 404);
+
         $data = $request->validate([
-            'nip' => 'required|string|max:30|unique:users,nip,' . $teacher->user_id,
+            'nip' => 'required|string|max:30|unique:users,nip,'.$teacher->user_id,
+            'role' => ['required', Rule::in(Teacher::DATA_GURU_ROLES)],
             'attendance_session_ids' => 'required|array',
             'attendance_session_ids.*' => 'exists:attendance_sessions,id',
             'attendance_days' => 'required|array|min:1',
-            'attendance_days.*' => 'in:' . implode(',', $this->days),
+            'attendance_days.*' => 'in:'.implode(',', $this->days),
             'nama_lengkap' => 'required|string|max:100',
-            'jenis_kelamin' => 'nullable|in:L,P',
+            'jenis_kelamin' => 'required|in:L,P',
             'no_hp' => 'nullable|string|max:20',
-            'email' => 'required|email|unique:users,email,' . $teacher->user_id,
-            'jabatan' => 'nullable|string|max:100',
+            'email' => 'required|email|unique:users,email,'.$teacher->user_id,
+            'jabatan' => 'required|in:Kepala Sekolah,Bendahara,Operator, Guru Kelas,Guru Bidang',
             'mata_pelajaran' => 'nullable|string|max:100',
         ]);
 
-        $teacher->user->update([
-            'nip' => $data['nip'],
-            'name' => $data['nama_lengkap'],
-            'email' => $data['email'],
-        ]);
+        DB::transaction(function () use ($data, $teacher): void {
+            $teacher->user->update([
+                'nip' => $data['nip'],
+                'name' => $data['nama_lengkap'],
+                'email' => $data['email'],
+            ]);
+            $teacher->user->role = $data['role'];
+            $teacher->user->save();
 
-        $teacher->update([
-            'attendance_session_id' => $data['attendance_session_ids'][0] ?? null,
-            'nama_lengkap' => $data['nama_lengkap'],
-            'jenis_kelamin' => $data['jenis_kelamin'] ?? null,
-            'no_hp' => $data['no_hp'] ?? null,
-            'email' => $data['email'],
-            'jabatan' => $data['jabatan'] ?? null,
-            'mata_pelajaran' => $data['mata_pelajaran'] ?? null,
-        ]);
+            $teacher->update([
+                'nama_lengkap' => $data['nama_lengkap'],
+                'jenis_kelamin' => $data['jenis_kelamin'],
+                'no_hp' => $data['no_hp'] ?? null,
+                'jabatan' => $data['jabatan'],
+                'mata_pelajaran' => $data['mata_pelajaran'] ?? null,
+            ]);
 
-        $teacher->attendanceSessions()->sync($data['attendance_session_ids']);
-        $this->syncTeacherWorkSchedules($teacher, $data['attendance_days']);
+            $teacher->attendanceSessions()->sync($data['attendance_session_ids']);
+            $this->syncTeacherWorkSchedules($teacher, $data['attendance_days']);
+        });
 
         return redirect()
-            ->route('admin.teachers')
+            ->route('admin.teachers', $request->only(['page', 'keyword']))
             ->with('success', 'Data guru berhasil diperbarui.');
     }
 
@@ -187,8 +182,35 @@ class AdminController extends Controller
         }
     }
 
+    public function bulkDeleteTeachers(Request $request)
+    {
+        $data = $request->validate([
+            'teacher_ids' => 'required|array|min:1',
+            'teacher_ids.*' => 'exists:teachers,id',
+        ]);
+
+        $teachers = Teacher::with('user')
+            ->whereIn('id', $data['teacher_ids'])
+            ->get();
+
+        if ($teachers->isEmpty()) {
+            return back()->with('error', 'Pilih data guru yang ingin dihapus.');
+        }
+
+        $userIds = $teachers
+            ->pluck('user_id')
+            ->filter()
+            ->all();
+
+        User::whereIn('id', $userIds)->delete();
+
+        return back()->with('success', 'Data guru terpilih berhasil dihapus.');
+    }
+
     public function deleteTeacher(Teacher $teacher)
     {
+        abort_unless(in_array($teacher->user?->role, Teacher::DATA_GURU_ROLES, true), 404);
+
         $teacher->user->delete();
 
         return back()->with('success', 'Data guru dihapus.');
@@ -222,7 +244,7 @@ class AdminController extends Controller
     {
         // $perPage = $this->resolvePerPage($request);
 
-        $users = User::whereIn('role', ['super_admin', 'kepala_sekolah', 'bendahara'])
+        $users = User::where('role', 'super_admin')
             ->orderBy('role', 'desc')
             ->paginate(7)
             ->appends($request->query());
@@ -243,47 +265,47 @@ class AdminController extends Controller
             'nip' => 'required|string|max:30|unique:users,nip',
             'name' => 'required|string|max:100',
             'email' => 'required|email|unique:users,email',
-            'role' => 'required|in:bendahara,kepala_sekolah,super_admin',
-            'password' => 'required|string|min:5',
-            'status' => 'required|in:aktif,nonaktif',
+            'password' => ['required', 'string', $this->strongPasswordRule()],
         ]);
 
-        User::create([
+        $user = new User([
             'nip' => $request->nip,
             'name' => $request->name,
             'email' => $request->email,
-            'role' => $request->role,
             'password' => Hash::make($request->password),
-            'status' => $request->status,
         ]);
+        // role & status di-set eksplisit (tidak fillable). Sudah divalidasi dengan in:.
+        $user->role = 'super_admin';
+        $user->status = 'aktif';
+        $user->save();
 
         return redirect()
             ->route('admin.users')
-            ->with('success', 'Data pengguna berhasil ditambahkan.');
+            ->with('success', 'Data admin berhasil ditambahkan.');
     }
 
     public function editUser(User $user)
     {
+        abort_unless($user->role === 'super_admin', 404);
+
         return view('admin.user_form', compact('user'));
     }
 
     public function updateUser(Request $request, User $user)
     {
+        abort_unless($user->role === 'super_admin', 404);
+
         $request->validate([
-            'nip' => 'required|string|max:30|unique:users,nip,' . $user->id,
+            'nip' => 'required|string|max:30|unique:users,nip,'.$user->id,
             'name' => 'required|string|max:100',
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'role' => 'required|in:bendahara,kepala_sekolah,super_admin',
-            'password' => 'nullable|string|min:5',
-            'status' => 'required|in:aktif,nonaktif',
+            'email' => 'required|email|unique:users,email,'.$user->id,
+            'password' => ['nullable', 'string', $this->strongPasswordRule()],
         ]);
 
         $data = [
             'nip' => $request->nip,
             'name' => $request->name,
             'email' => $request->email,
-            'role' => $request->role,
-            'status' => $request->status,
         ];
 
         if ($request->filled('password')) {
@@ -294,31 +316,56 @@ class AdminController extends Controller
 
         return redirect()
             ->route('admin.users')
-            ->with('success', 'Data pengguna berhasil diperbarui.');
+            ->with('success', 'Data admin berhasil diperbarui.');
+    }
+
+    public function bulkDeleteUsers(Request $request)
+    {
+        $data = $request->validate([
+            'user_ids' => 'required|array|min:1',
+            'user_ids.*' => 'exists:users,id',
+        ]);
+
+        $userIds = collect($data['user_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->reject(fn ($id) => $id === auth()->id())
+            ->values();
+
+        if ($userIds->isEmpty()) {
+            return back()->with('error', 'Akun yang sedang digunakan tidak boleh dihapus.');
+        }
+
+        User::where('role', 'super_admin')->whereIn('id', $userIds)->delete();
+
+        return back()->with('success', 'Data admin terpilih berhasil dihapus.');
     }
 
     public function deleteUser(User $user)
     {
+        abort_unless($user->role === 'super_admin', 404);
+
         if (auth()->id() === $user->id) {
             return back()->with('error', 'Akun yang sedang digunakan tidak boleh dihapus.');
         }
 
         $user->delete();
 
-        return back()->with('success', 'Data pengguna berhasil dihapus.');
+        return back()->with('success', 'Data admin berhasil dihapus.');
     }
 
     public function toggleUserStatus(User $user)
     {
+        abort_unless($user->role === 'super_admin', 404);
+
         if (auth()->id() === $user->id && $user->status === 'aktif') {
             return back()->with('error', 'Akun yang sedang digunakan tidak boleh dinonaktifkan.');
         }
 
-        $user->update([
-            'status' => $user->status === 'aktif' ? 'nonaktif' : 'aktif',
-        ]);
+        // status tidak fillable — set eksplisit.
+        $user->status = $user->status === 'aktif' ? 'nonaktif' : 'aktif';
+        $user->save();
 
-        return back()->with('success', 'Status pengguna berhasil diubah.');
+        return back()->with('success', 'Status admin berhasil diubah.');
     }
 
     public function exportTeacherAccountsExcel()
@@ -333,7 +380,7 @@ class AdminController extends Controller
     {
         $teachers = Teacher::with(['user', 'attendanceSessions', 'schedules'])
             ->whereHas('user', function ($query) {
-                $query->where('role', 'guru');
+                $query->whereIn('role', Teacher::DATA_GURU_ROLES);
             })
             ->orderBy('nama_lengkap')
             ->get();
@@ -347,12 +394,16 @@ class AdminController extends Controller
         ]);
     }
 
-
     private function resolvePerPage(Request $request, int $default = 7): int
     {
         $allowed = [7, 14, 21, 28, 35, 70];
         $perPage = (int) $request->input('per_page', $default);
 
         return in_array($perPage, $allowed, true) ? $perPage : $default;
+    }
+
+    private function strongPasswordRule(): Password
+    {
+        return Password::min(8)->mixedCase()->letters()->numbers()->symbols();
     }
 }

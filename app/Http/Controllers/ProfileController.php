@@ -85,11 +85,11 @@ class ProfileController extends Controller
     {
         $request->validate([
             'old_password' => 'required',
-            'password' => 'required|min:5|confirmed',
+            'password' => 'required|min:8|confirmed',
         ], [
             'old_password.required' => 'Password lama wajib diisi.',
             'password.required' => 'Password baru wajib diisi.',
-            'password.min' => 'Password baru minimal 5 karakter.',
+            'password.min' => 'Password baru minimal 8 karakter.',
             'password.confirmed' => 'Konfirmasi password baru tidak sesuai.',
         ]);
 

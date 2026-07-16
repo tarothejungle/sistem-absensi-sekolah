@@ -11,6 +11,7 @@ use App\Services\DailyAttendanceStatusService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AttendanceStatusTest extends TestCase
@@ -57,6 +58,79 @@ class AttendanceStatusTest extends TestCase
             'attendance_session_id' => $session->id,
             'tanggal' => '2026-06-30',
         ]);
+    }
+
+    public function test_check_in_success_stores_attendance(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
+        Storage::fake('local');
+
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+
+        $this->activateOnlyTestLocation();
+
+        $response = $this
+            ->actingAs($user)
+            ->post(route('attendance.checkin'), [
+                'attendance_session_id' => $session->id,
+                'latitude' => -6.20000000,
+                'longitude' => 106.81666600,
+                'accuracy' => 15,
+                'face_image' => $this->validFaceImage(),
+            ]);
+
+        $response->assertSessionHas('success');
+        $response->assertSessionMissing('error');
+
+        $attendance = Attendance::where('teacher_id', $teacher->id)
+            ->where('attendance_session_id', $session->id)
+            ->whereDate('tanggal', '2026-06-30')
+            ->first();
+
+        $this->assertNotNull($attendance);
+        $this->assertNotNull($attendance->check_in_time);
+        $this->assertSame('hadir', $attendance->status_kehadiran);
+    }
+
+    public function test_check_out_success_after_check_in(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 12:30:00', 'Asia/Jakarta'));
+        Storage::fake('local');
+
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+
+        $this->activateOnlyTestLocation();
+
+        $attendance = Attendance::create([
+            'teacher_id' => $teacher->id,
+            'attendance_session_id' => $session->id,
+            'tanggal' => '2026-06-30',
+            'check_in_time' => Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'),
+            'verification_method' => 'face',
+            'status_kehadiran' => 'hadir',
+            'keterlambatan_menit' => 0,
+        ]);
+
+        $response = $this
+            ->actingAs($user)
+            ->post(route('attendance.checkout'), [
+                'attendance_session_id' => $session->id,
+                'latitude' => -6.20000000,
+                'longitude' => 106.81666600,
+                'accuracy' => 15,
+                'face_image' => $this->validFaceImage(),
+            ]);
+
+        $response->assertSessionHas('success');
+        $response->assertSessionMissing('error');
+
+        $attendance->refresh();
+
+        $this->assertNotNull($attendance->check_out_time);
     }
 
     public function test_sync_marks_checked_in_without_checkout_as_incomplete_after_checkout_cutoff(): void
@@ -111,6 +185,31 @@ class AttendanceStatusTest extends TestCase
         $this->assertNull($attendance->check_out_time);
     }
 
+    private function activateOnlyTestLocation(): void
+    {
+        // DB test = DB dev (DatabaseTransactions), bisa sudah ada lokasi aktif
+        // lain. Nonaktifkan dulu agar lokasi test yang dipakai controller.
+        SchoolLocation::where('status', 'aktif')->update(['status' => 'nonaktif']);
+
+        SchoolLocation::create([
+            'nama_lokasi' => 'Sekolah Test',
+            'latitude' => -6.20000000,
+            'longitude' => 106.81666600,
+            'radius_meter' => 150,
+            'status' => 'aktif',
+        ]);
+    }
+
+    private function validFaceImage(): string
+    {
+        // PNG 1x1 transparan yang valid agar lolos FaceVerificationService::verify().
+        $png = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        );
+
+        return 'data:image/png;base64,' . base64_encode($png);
+    }
+
     private function createSession(): AttendanceSession
     {
         return AttendanceSession::create([
@@ -133,9 +232,9 @@ class AttendanceStatusTest extends TestCase
             'name' => 'Guru Absensi Test',
             'email' => uniqid('attendance_', true) . '@example.test',
             'password' => Hash::make('password'),
-            'role' => 'guru',
-            'status' => 'aktif',
         ]);
+
+        $user->forceFill(['role' => 'guru', 'status' => 'aktif'])->save();
 
         $teacher = Teacher::create([
             'user_id' => $user->id,
