@@ -6,13 +6,17 @@ use App\Models\Attendance;
 use App\Models\DutySchedule;
 use App\Models\HolidaySetting;
 use App\Models\SchoolLocation;
+use App\Models\Teacher;
 use App\Models\WorkSchedule;
+use App\Services\DailyAttendanceStatusService;
 use App\Services\FaceVerificationService;
 use App\Services\GeoFenceService;
-use App\Services\DailyAttendanceStatusService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
+use Throwable;
 
 class AttendanceController extends Controller
 {
@@ -20,7 +24,7 @@ class AttendanceController extends Controller
 
     public function index()
     {
-        if (!in_array(auth()->user()->role, ['guru', 'bendahara', 'kepala_sekolah'])) {
+        if (! in_array(auth()->user()->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'], true)) {
             return redirect()
                 ->route('dashboard')
                 ->with('error', 'Halaman absensi hanya dapat diakses oleh guru.');
@@ -29,12 +33,17 @@ class AttendanceController extends Controller
         $teacher = auth()->user()->teacher;
         $perPage = $this->resolvePerPage(request());
 
-        if (!$teacher) {
+        if (! $teacher) {
             return redirect()
                 ->route('dashboard')
                 ->with('error', 'Data guru belum tersedia untuk akun ini.');
         }
 
+        $teacher->load('faceEnrollment');
+        $faceEnrollment = $teacher->faceEnrollment;
+        if ($faceEnrollment && ! $faceEnrollment->isCompatible()) {
+            $faceEnrollment = null;
+        }
         $today = now('Asia/Jakarta')->toDateString();
         $nowTime = now('Asia/Jakarta')->format('H:i:s');
         $hariIni = $this->todayHari();
@@ -69,11 +78,11 @@ class AttendanceController extends Controller
                         $nowTime,
                         $session->batas_check_in_mulai,
                         $session->batas_check_in_selesai
-                    ) && (!$attendance || !$attendance->check_in_time);
+                    ) && (! $attendance || ! $attendance->check_in_time);
 
                     $session->canCheckOut = $attendance
                         && $attendance->check_in_time
-                        && !$attendance->check_out_time
+                        && ! $attendance->check_out_time
                         && $this->isTimeInRangeString(
                             $nowTime,
                             $session->batas_check_out_mulai,
@@ -83,13 +92,15 @@ class AttendanceController extends Controller
                     return $session;
                 });
 
-            $activeSession = $sessions->first(function ($session) {
-                $attendance = $session->todayAttendance;
+            $activeSession = $sessions->first(fn ($session) => $session->canCheckOut)
+                ?? $sessions->first(fn ($session) => $session->canCheckIn)
+                ?? $sessions->first(function ($session) {
+                    $attendance = $session->todayAttendance;
 
-                return !$attendance || !$attendance->check_in_time || !$attendance->check_out_time;
-            });
+                    return ! $attendance || ! $attendance->check_in_time || ! $attendance->check_out_time;
+                });
 
-            if (!$activeSession) {
+            if (! $activeSession) {
                 $activeSession = $sessions->last();
             }
         }
@@ -101,7 +112,7 @@ class AttendanceController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        return view('attendance.index', compact('sessions', 'activeSession', 'attendances', 'scheduleMessage', 'hariIni'));
+        return view('attendance.index', compact('sessions', 'activeSession', 'attendances', 'scheduleMessage', 'hariIni', 'faceEnrollment'));
     }
 
     private function getTeacherSessions($teacher)
@@ -156,17 +167,17 @@ class AttendanceController extends Controller
             ->approvedFullDayLeaveForTeacherDate($teacher, $date);
 
         if ($approvedFullDayLeave) {
-            return 'Karena pengajuan ' . $this->leaveStatusLabel($approvedFullDayLeave->jenis_pengajuan)
-                . ' Anda sudah disetujui. Kewajiban absen hari ini otomatis digugurkan.';
+            return 'Karena pengajuan '.$this->leaveStatusLabel($approvedFullDayLeave->jenis_pengajuan)
+                .' Anda sudah disetujui. Kewajiban absen hari ini otomatis digugurkan.';
         }
 
         $isOnDuty = $this->isTeacherOnActiveDuty($teacher, $date);
 
-        if ($this->isActiveHoliday($date) && !$isOnDuty) {
+        if ($this->isActiveHoliday($date) && ! $isOnDuty) {
             return 'Hari ini ditetapkan sebagai hari libur. Absensi hanya dibuka untuk guru/karyawan yang masuk jadwal piket aktif.';
         }
 
-        if ($hasAnySchedule && !$schedule && !$isOnDuty) {
+        if ($hasAnySchedule && ! $schedule && ! $isOnDuty) {
             return 'Hari ini belum termasuk jadwal absensi untuk akun Anda. Silakan hubungi admin apabila jadwal mengajar belum sesuai.';
         }
 
@@ -208,15 +219,15 @@ class AttendanceController extends Controller
     ) {
         $request->validate([
             'attendance_session_id' => 'required|exists:attendance_sessions,id',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'accuracy' => 'nullable|numeric',
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'accuracy' => 'required|numeric|gt:0',
             'face_image' => 'required|string|max:4000000',
         ]);
 
         $teacher = auth()->user()->teacher;
 
-        if (!$teacher) {
+        if (! $teacher) {
             return back()->with('error', 'Profil guru belum tersedia.');
         }
 
@@ -233,13 +244,13 @@ class AttendanceController extends Controller
             ->where('id', (int) $request->attendance_session_id)
             ->first();
 
-        if (!$session) {
+        if (! $session) {
             return back()->with('error', 'Sesi absensi tidak valid untuk akun ini.');
         }
 
         $location = SchoolLocation::where('status', 'aktif')->first();
 
-        if (!$location) {
+        if (! $location) {
             return back()->with('error', 'Lokasi sekolah belum diatur admin.');
         }
 
@@ -251,37 +262,32 @@ class AttendanceController extends Controller
         );
 
         $gpsAccuracy = (float) $request->input('accuracy', 0);
+        $maxAccuracy = $this->maxGpsAccuracy($location);
 
-        if ($this->isGpsAccuracyTooLow($gpsAccuracy)) {
-            return back()->with('error', $this->gpsAccuracyErrorMessage($gpsAccuracy));
+        if ($this->isGpsAccuracyTooLow($gpsAccuracy, $maxAccuracy)) {
+            return back()->with('error', $this->gpsAccuracyErrorMessage($gpsAccuracy, $maxAccuracy));
         }
 
-        $allowedRadius = (float) $location->radius_meter + min($gpsAccuracy, 100);
-
-        if ($distance > $allowedRadius) {
+        if ($distance > (float) $location->radius_meter) {
             return back()->with(
                 'error',
-                'Absensi ditolak. Anda berada di luar radius sekolah. ' .
-                'Jarak terdeteksi: ' . round($distance) . ' meter. ' .
-                'Radius sekolah: ' . $location->radius_meter . ' meter. ' .
-                'Akurasi GPS: ' . round($gpsAccuracy) . ' meter.'
+                'Absensi ditolak. Anda berada di luar radius sekolah. '.
+                'Jarak terdeteksi: '.round($distance).' meter. '.
+                'Radius sekolah: '.$location->radius_meter.' meter. '.
+                'Akurasi GPS: '.round($gpsAccuracy).' meter.'
             );
-        }
-
-        if (!$face->verify($request->face_image)) {
-            return back()->with('error', 'Validasi wajah gagal. Pastikan kamera aktif.');
         }
 
         $now = now('Asia/Jakarta');
         $today = $now->toDateString();
         $jamSekarang = $now->format('H:i:s');
 
-        if (!$this->isTimeInRangeString($jamSekarang, $session->batas_check_in_mulai, $session->batas_check_in_selesai)) {
+        if (! $this->isTimeInRangeString($jamSekarang, $session->batas_check_in_mulai, $session->batas_check_in_selesai)) {
             return back()->with(
                 'error',
-                'Check-in ' . $session->nama_sesi . ' hanya dapat dilakukan pada pukul ' .
-                substr($session->batas_check_in_mulai, 0, 5) . ' - ' .
-                substr($session->batas_check_in_selesai, 0, 5) . '.'
+                'Check-in '.$session->nama_sesi.' hanya dapat dilakukan pada pukul '.
+                substr($session->batas_check_in_mulai, 0, 5).' - '.
+                substr($session->batas_check_in_selesai, 0, 5).'.'
             );
         }
 
@@ -292,7 +298,21 @@ class AttendanceController extends Controller
             ->exists();
 
         if ($alreadyCheckedIn) {
-            return back()->with('error', 'Anda sudah check-in untuk ' . $session->nama_sesi . '.');
+            return back()->with('error', 'Anda sudah check-in untuk '.$session->nama_sesi.'.');
+        }
+
+        if (! $teacher->faceEnrollment) {
+            return back()->with('error', 'Wajah belum didaftarkan. Hubungi admin untuk pendaftaran wajah.');
+        }
+
+        try {
+            $faceResult = $face->verify($request->face_image, $teacher->faceEnrollment);
+        } catch (RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        if (! $faceResult['matched']) {
+            return back()->with('error', 'Wajah tidak cocok dengan data terdaftar. Pastikan wajah menghadap kamera lalu coba lagi.');
         }
 
         $jamMasuk = Carbon::parse($session->jam_masuk);
@@ -306,45 +326,71 @@ class AttendanceController extends Controller
             $keterlambatanMenit = $batasTerlambat->diffInMinutes(Carbon::parse($jamSekarang));
         }
 
-        $photo = $face->saveBase64Image($request->face_image, 'attendance_faces');
+        $photo = null;
 
-        $existingSystemAttendance = Attendance::where('teacher_id', $teacher->id)
-            ->where('attendance_session_id', $session->id)
-            ->whereDate('tanggal', $today)
-            ->first();
+        try {
+            $saved = DB::transaction(function () use ($face, $request, $teacher, $session, $today, $schedule, $now, $faceResult, $statusKehadiran, $keterlambatanMenit, &$photo): bool {
+                Teacher::whereKey($teacher->id)->lockForUpdate()->firstOrFail();
 
-        $leaveStatuses = ['izin', 'sakit', 'cuti', 'tugas_luar'];
-        $finalStatusKehadiran = $existingSystemAttendance && in_array($existingSystemAttendance->status_kehadiran, $leaveStatuses, true)
-            ? $existingSystemAttendance->status_kehadiran
-            : $statusKehadiran;
+                $attendance = Attendance::where('teacher_id', $teacher->id)
+                    ->where('attendance_session_id', $session->id)
+                    ->where('tanggal', $today)
+                    ->lockForUpdate()
+                    ->first();
 
-        $payload = [
-            'work_schedule_id' => $schedule?->id,
-            'tanggal' => $today,
-            'check_in_time' => $now,
-            'check_in_latitude' => $request->latitude,
-            'check_in_longitude' => $request->longitude,
-            'check_in_face_photo' => $photo,
-            'verification_method' => 'face',
-            'status_kehadiran' => $finalStatusKehadiran,
-            'keterlambatan_menit' => $finalStatusKehadiran === $statusKehadiran ? $keterlambatanMenit : 0,
-            'device_info' => $request->userAgent(),
-        ];
+                if ($attendance?->check_in_time) {
+                    return false;
+                }
 
-        if ($existingSystemAttendance) {
-            $existingSystemAttendance->update($payload);
-        } else {
-            Attendance::create(array_merge($payload, [
-                'teacher_id' => $teacher->id,
-                'attendance_session_id' => $session->id,
-            ]));
+                $photo = $face->saveBase64Image($request->face_image, 'attendance_faces');
+                $leaveStatuses = ['izin', 'sakit', 'cuti', 'tugas_luar'];
+                $finalStatus = $attendance && in_array($attendance->status_kehadiran, $leaveStatuses, true)
+                    ? $attendance->status_kehadiran
+                    : $statusKehadiran;
+                $payload = [
+                    'work_schedule_id' => $schedule?->id,
+                    'tanggal' => $today,
+                    'check_in_time' => $now,
+                    'check_in_latitude' => $request->latitude,
+                    'check_in_longitude' => $request->longitude,
+                    'check_in_face_photo' => $photo,
+                    'check_in_face_match_score' => $faceResult['distance'],
+                    'verification_method' => 'face_match_fastapi',
+                    'status_kehadiran' => $finalStatus,
+                    'keterlambatan_menit' => $finalStatus === $statusKehadiran ? $keterlambatanMenit : 0,
+                    'device_info' => $request->userAgent(),
+                ];
+
+                if ($attendance) {
+                    $attendance->update($payload);
+                } else {
+                    Attendance::create(array_merge($payload, [
+                        'teacher_id' => $teacher->id,
+                        'attendance_session_id' => $session->id,
+                    ]));
+                }
+
+                return true;
+            });
+        } catch (Throwable $exception) {
+            if ($photo) {
+                Storage::disk('local')->delete($photo);
+            }
+
+            report($exception);
+
+            return back()->with('error', 'Check-in belum dapat disimpan. Silakan coba kembali.');
+        }
+
+        if (! $saved) {
+            return back()->with('error', 'Anda sudah check-in untuk '.$session->nama_sesi.'.');
         }
 
         if ($statusKehadiran === 'terlambat') {
-            return back()->with('success', 'Check-in berhasil disimpan untuk ' . $session->nama_sesi . '. Status: terlambat ' . $keterlambatanMenit . ' menit.');
+            return back()->with('success', 'Check-in berhasil disimpan untuk '.$session->nama_sesi.'. Status: terlambat '.$keterlambatanMenit.' menit.');
         }
 
-        return back()->with('success', 'Check-in berhasil disimpan untuk ' . $session->nama_sesi . '. Status: hadir.');
+        return back()->with('success', 'Check-in berhasil disimpan untuk '.$session->nama_sesi.'. Status: hadir.');
     }
 
     public function checkOut(
@@ -354,15 +400,15 @@ class AttendanceController extends Controller
     ) {
         $request->validate([
             'attendance_session_id' => 'required|exists:attendance_sessions,id',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'accuracy' => 'nullable|numeric',
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'accuracy' => 'required|numeric|gt:0',
             'face_image' => 'required|string|max:4000000',
         ]);
 
         $teacher = auth()->user()->teacher;
 
-        if (!$teacher) {
+        if (! $teacher) {
             return back()->with('error', 'Profil guru belum tersedia.');
         }
 
@@ -379,13 +425,13 @@ class AttendanceController extends Controller
             ->where('id', (int) $request->attendance_session_id)
             ->first();
 
-        if (!$session) {
+        if (! $session) {
             return back()->with('error', 'Sesi absensi tidak valid untuk akun ini.');
         }
 
         $location = SchoolLocation::where('status', 'aktif')->first();
 
-        if (!$location) {
+        if (! $location) {
             return back()->with('error', 'Lokasi sekolah belum diatur admin.');
         }
 
@@ -397,37 +443,32 @@ class AttendanceController extends Controller
         );
 
         $gpsAccuracy = (float) $request->input('accuracy', 0);
+        $maxAccuracy = $this->maxGpsAccuracy($location);
 
-        if ($this->isGpsAccuracyTooLow($gpsAccuracy)) {
-            return back()->with('error', $this->gpsAccuracyErrorMessage($gpsAccuracy));
+        if ($this->isGpsAccuracyTooLow($gpsAccuracy, $maxAccuracy)) {
+            return back()->with('error', $this->gpsAccuracyErrorMessage($gpsAccuracy, $maxAccuracy));
         }
 
-        $allowedRadius = (float) $location->radius_meter + min($gpsAccuracy, 100);
-
-        if ($distance > $allowedRadius) {
+        if ($distance > (float) $location->radius_meter) {
             return back()->with(
                 'error',
-                'Check-out ditolak. Anda berada di luar radius sekolah. ' .
-                'Jarak terdeteksi: ' . round($distance) . ' meter. ' .
-                'Radius sekolah: ' . $location->radius_meter . ' meter. ' .
-                'Akurasi GPS: ' . round($gpsAccuracy) . ' meter.'
+                'Check-out ditolak. Anda berada di luar radius sekolah. '.
+                'Jarak terdeteksi: '.round($distance).' meter. '.
+                'Radius sekolah: '.$location->radius_meter.' meter. '.
+                'Akurasi GPS: '.round($gpsAccuracy).' meter.'
             );
-        }
-
-        if (!$face->verify($request->face_image)) {
-            return back()->with('error', 'Validasi wajah gagal.');
         }
 
         $now = now('Asia/Jakarta');
         $today = $now->toDateString();
         $jamSekarang = $now->format('H:i:s');
 
-        if (!$this->isTimeInRangeString($jamSekarang, $session->batas_check_out_mulai, $session->batas_check_out_selesai)) {
+        if (! $this->isTimeInRangeString($jamSekarang, $session->batas_check_out_mulai, $session->batas_check_out_selesai)) {
             return back()->with(
                 'error',
-                'Check-out ' . $session->nama_sesi . ' hanya dapat dilakukan pada pukul ' .
-                substr($session->batas_check_out_mulai, 0, 5) . ' - ' .
-                substr($session->batas_check_out_selesai, 0, 5) . '.'
+                'Check-out '.$session->nama_sesi.' hanya dapat dilakukan pada pukul '.
+                substr($session->batas_check_out_mulai, 0, 5).' - '.
+                substr($session->batas_check_out_selesai, 0, 5).'.'
             );
         }
 
@@ -436,24 +477,69 @@ class AttendanceController extends Controller
             ->whereDate('tanggal', $today)
             ->first();
 
-        if (!$attendance || !$attendance->check_in_time) {
-            return back()->with('error', 'Anda belum check-in untuk ' . $session->nama_sesi . '.');
+        if (! $attendance || ! $attendance->check_in_time) {
+            return back()->with('error', 'Anda belum check-in untuk '.$session->nama_sesi.'.');
         }
 
         if ($attendance->check_out_time) {
-            return back()->with('error', 'Anda sudah check-out untuk ' . $session->nama_sesi . '.');
+            return back()->with('error', 'Anda sudah check-out untuk '.$session->nama_sesi.'.');
         }
 
-        $photo = $face->saveBase64Image($request->face_image, 'attendance_faces');
+        if (! $teacher->faceEnrollment) {
+            return back()->with('error', 'Wajah belum didaftarkan. Hubungi admin untuk pendaftaran wajah.');
+        }
 
-        $attendance->update([
-            'check_out_time' => $now,
-            'check_out_latitude' => $request->latitude,
-            'check_out_longitude' => $request->longitude,
-            'check_out_face_photo' => $photo,
-        ]);
+        try {
+            $faceResult = $face->verify($request->face_image, $teacher->faceEnrollment);
+        } catch (RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
 
-        return back()->with('success', 'Check-out berhasil disimpan untuk ' . $session->nama_sesi . '.');
+        if (! $faceResult['matched']) {
+            return back()->with('error', 'Wajah tidak cocok dengan data terdaftar. Pastikan wajah menghadap kamera lalu coba lagi.');
+        }
+
+        $photo = null;
+
+        try {
+            $saved = DB::transaction(function () use ($face, $request, $teacher, $session, $today, $now, $faceResult, &$photo): bool {
+                Teacher::whereKey($teacher->id)->lockForUpdate()->firstOrFail();
+                $attendance = Attendance::where('teacher_id', $teacher->id)
+                    ->where('attendance_session_id', $session->id)
+                    ->where('tanggal', $today)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $attendance?->check_in_time || $attendance->check_out_time) {
+                    return false;
+                }
+
+                $photo = $face->saveBase64Image($request->face_image, 'attendance_faces');
+                $attendance->update([
+                    'check_out_time' => $now,
+                    'check_out_latitude' => $request->latitude,
+                    'check_out_longitude' => $request->longitude,
+                    'check_out_face_photo' => $photo,
+                    'check_out_face_match_score' => $faceResult['distance'],
+                ]);
+
+                return true;
+            });
+        } catch (Throwable $exception) {
+            if ($photo) {
+                Storage::disk('local')->delete($photo);
+            }
+
+            report($exception);
+
+            return back()->with('error', 'Check-out belum dapat disimpan. Silakan coba kembali.');
+        }
+
+        if (! $saved) {
+            return back()->with('error', 'Status absensi sudah berubah. Muat ulang halaman lalu coba kembali.');
+        }
+
+        return back()->with('success', 'Check-out berhasil disimpan untuk '.$session->nama_sesi.'.');
     }
 
     public function photo(Attendance $attendance, string $type)
@@ -469,13 +555,12 @@ class AttendanceController extends Controller
         $column = $type === 'check-out' ? 'check_out_face_photo' : 'check_in_face_photo';
         $path = $this->resolveAttendancePhotoPath($attendance->{$column});
 
-        if (!$path) {
+        if (! $path) {
             abort(404, 'Foto absensi tidak ditemukan.');
         }
 
         return response()->file($path);
     }
-
 
     private function resolvePerPage(Request $request, int $default = 7): int
     {
@@ -485,22 +570,27 @@ class AttendanceController extends Controller
         return in_array($perPage, $allowed, true) ? $perPage : $default;
     }
 
-    private function isGpsAccuracyTooLow(float $gpsAccuracy): bool
+    private function maxGpsAccuracy(SchoolLocation $location): float
     {
-        return $gpsAccuracy > self::MAX_GPS_ACCURACY_METERS;
+        return (float) ($location->max_gps_accuracy ?? self::MAX_GPS_ACCURACY_METERS);
     }
 
-    private function gpsAccuracyErrorMessage(float $gpsAccuracy): string
+    private function isGpsAccuracyTooLow(float $gpsAccuracy, float $maxAccuracy): bool
     {
-        return 'Absensi ditolak. Akurasi GPS terlalu rendah. ' .
-            'Akurasi terdeteksi: ' . round($gpsAccuracy) . ' meter. ' .
-            'Maksimal akurasi yang diizinkan: ' . self::MAX_GPS_ACCURACY_METERS . ' meter. ' .
+        return $gpsAccuracy > $maxAccuracy;
+    }
+
+    private function gpsAccuracyErrorMessage(float $gpsAccuracy, float $maxAccuracy): string
+    {
+        return 'Absensi ditolak. Akurasi GPS terlalu rendah. '.
+            'Akurasi terdeteksi: '.round($gpsAccuracy).' meter. '.
+            'Maksimal akurasi yang diizinkan: '.round($maxAccuracy).' meter. '.
             'Aktifkan mode akurasi tinggi GPS, mendekat ke area terbuka, lalu coba lagi.';
     }
 
     private function resolveAttendancePhotoPath(?string $relativePath): ?string
     {
-        if (!$relativePath) {
+        if (! $relativePath) {
             return null;
         }
 
@@ -514,7 +604,7 @@ class AttendanceController extends Controller
             $relativePath = substr($relativePath, strlen('storage/'));
         }
 
-        if (str_contains($relativePath, '..') || !str_starts_with($relativePath, 'attendance_faces/')) {
+        if (str_contains($relativePath, '..') || ! str_starts_with($relativePath, 'attendance_faces/')) {
             return null;
         }
 

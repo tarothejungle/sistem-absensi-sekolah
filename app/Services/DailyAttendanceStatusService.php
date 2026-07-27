@@ -28,40 +28,50 @@ class DailyAttendanceStatusService
                 ->whereDate('tanggal', $todayString)
                 ->get();
 
-            $hasRealAttendance = $existingRows->contains(function ($attendance) {
-                return !is_null($attendance->check_in_time);
-            });
-
-            if ($hasRealAttendance) {
-                $this->markIncompleteAttendances($existingRows, $teacher, $targetDate, $hari);
-                continue;
-            }
-
             $approvedLeave = $this->approvedFullDayLeaveForTeacherDate($teacher, $targetDate);
-
             $schedule = $this->todaySchedule($teacher, $hari);
-            $session = $this->firstActiveSession($teacher);
+            $sessions = $this->activeSessions($teacher);
 
-            if ($approvedLeave) {
-                $this->createOrUpdateSystemAttendance(
-                    $teacher,
-                    $targetDate,
-                    $session,
-                    $schedule,
-                    $approvedLeave->jenis_pengajuan
-                );
+            $this->markIncompleteAttendances($existingRows, $teacher, $targetDate, $hari);
 
-                continue;
+            if ($sessions->isEmpty()) {
+                if ($existingRows->contains(fn ($attendance) => ! is_null($attendance->check_in_time))) {
+                    continue;
+                }
+
+                $sessions = collect([null]);
             }
 
-            if ($this->shouldMarkAlfa($teacher, $targetDate, $session, $schedule)) {
-                $this->createOrUpdateSystemAttendance(
-                    $teacher,
-                    $targetDate,
-                    $session,
-                    $schedule,
-                    'alfa'
-                );
+            foreach ($sessions as $session) {
+                $attendance = $existingRows->firstWhere('attendance_session_id', $session?->id);
+
+                if ($attendance?->check_in_time) {
+                    $this->markIncompleteAttendances(collect([$attendance]), $teacher, $targetDate, $hari);
+
+                    continue;
+                }
+
+                if ($approvedLeave) {
+                    $this->createOrUpdateSystemAttendance(
+                        $teacher,
+                        $targetDate,
+                        $session,
+                        $schedule,
+                        $approvedLeave->jenis_pengajuan
+                    );
+
+                    continue;
+                }
+
+                if ($this->shouldMarkAlfa($targetDate, $session, $schedule)) {
+                    $this->createOrUpdateSystemAttendance(
+                        $teacher,
+                        $targetDate,
+                        $session,
+                        $schedule,
+                        'alfa'
+                    );
+                }
             }
         }
 
@@ -118,8 +128,7 @@ class DailyAttendanceStatusService
         $date = null,
         ?Collection $expectedTeachers = null,
         ?Collection $dailyAttendances = null
-    ): Collection
-    {
+    ): Collection {
         $targetDate = $this->parseDate($date);
         $todayString = $targetDate->toDateString();
 
@@ -136,16 +145,33 @@ class DailyAttendanceStatusService
         return $expectedTeachers
             ->filter(function (Teacher $teacher) use ($attendancesByTeacher, $excusedStatuses) {
                 $teacherAttendances = $attendancesByTeacher->get($teacher->id, collect());
+                $sessionIds = $this->activeSessions($teacher)->pluck('id');
+
+                if ($sessionIds->isNotEmpty()) {
+                    return $sessionIds->contains(function ($sessionId) use ($teacherAttendances, $excusedStatuses) {
+                        $attendance = $teacherAttendances->firstWhere('attendance_session_id', $sessionId);
+
+                        if (! $attendance) {
+                            return true;
+                        }
+
+                        if (in_array($attendance->status_kehadiran, $excusedStatuses, true)) {
+                            return false;
+                        }
+
+                        return is_null($attendance->check_in_time);
+                    });
+                }
 
                 if ($teacherAttendances->isEmpty()) {
                     return true;
                 }
 
-                if ($teacherAttendances->contains(fn (Attendance $attendance) => !is_null($attendance->check_in_time))) {
+                if ($teacherAttendances->contains(fn (Attendance $attendance) => ! is_null($attendance->check_in_time))) {
                     return false;
                 }
 
-                return !$teacherAttendances->contains(function (Attendance $attendance) use ($excusedStatuses) {
+                return ! $teacherAttendances->contains(function (Attendance $attendance) use ($excusedStatuses) {
                     return in_array($attendance->status_kehadiran, $excusedStatuses, true);
                 });
             })
@@ -180,7 +206,7 @@ class DailyAttendanceStatusService
             ->whereDate('tanggal', $targetDate->toDateString())
             ->first();
 
-        if (!$dutySchedule) {
+        if (! $dutySchedule) {
             return collect();
         }
 
@@ -208,7 +234,7 @@ class DailyAttendanceStatusService
             ->whereNull('check_in_time')
             ->whereNull('check_out_time')
             ->when(
-                !empty($expectedTeacherIds),
+                ! empty($expectedTeacherIds),
                 fn ($query) => $query->whereNotIn('teacher_id', $expectedTeacherIds)
             )
             ->delete();
@@ -225,6 +251,11 @@ class DailyAttendanceStatusService
 
         $attendance = Attendance::where('teacher_id', $teacher->id)
             ->whereDate('tanggal', $todayString)
+            ->when(
+                $session,
+                fn ($query) => $query->where('attendance_session_id', $session->id),
+                fn ($query) => $query->whereNull('attendance_session_id')
+            )
             ->whereNull('check_in_time')
             ->whereNull('check_out_time')
             ->first();
@@ -241,6 +272,7 @@ class DailyAttendanceStatusService
 
         if ($attendance) {
             $attendance->update($payload);
+
             return $attendance;
         }
 
@@ -250,7 +282,6 @@ class DailyAttendanceStatusService
     }
 
     private function shouldMarkAlfa(
-        Teacher $teacher,
         Carbon $targetDate,
         ?AttendanceSession $session,
         ?WorkSchedule $schedule
@@ -260,32 +291,24 @@ class DailyAttendanceStatusService
             return true;
         }
 
-        // Untuk hari ini, alfa baru dibuat setelah batas check-in terakhir lewat.
-        if (!$targetDate->isSameDay(now('Asia/Jakarta'))) {
+        // Untuk hari ini, alfa baru dibuat setelah batas check-in sesi lewat.
+        if (! $targetDate->isSameDay(now('Asia/Jakarta'))) {
             return false;
         }
 
         $now = now('Asia/Jakarta');
         $cutoff = null;
 
-        $sessions = $this->activeSessions($teacher);
-
-        if ($sessions->isNotEmpty()) {
-            foreach ($sessions as $item) {
-                $candidate = Carbon::parse($targetDate->toDateString() . ' ' . $item->batas_check_in_selesai, 'Asia/Jakarta');
-
-                if (!$cutoff || $candidate->gt($cutoff)) {
-                    $cutoff = $candidate;
-                }
-            }
+        if ($session) {
+            $cutoff = Carbon::parse($targetDate->toDateString().' '.$session->batas_check_in_selesai, 'Asia/Jakarta');
         } elseif ($schedule) {
-            $cutoff = Carbon::parse($targetDate->toDateString() . ' ' . $schedule->jam_masuk, 'Asia/Jakarta')
+            $cutoff = Carbon::parse($targetDate->toDateString().' '.$schedule->jam_masuk, 'Asia/Jakarta')
                 ->addMinutes((int) $schedule->toleransi_terlambat);
         }
 
-        if (!$cutoff) {
+        if (! $cutoff) {
             // Fallback aman agar sistem tidak menandai alfa terlalu pagi.
-            $cutoff = Carbon::parse($targetDate->toDateString() . ' 23:59:59', 'Asia/Jakarta');
+            $cutoff = Carbon::parse($targetDate->toDateString().' 23:59:59', 'Asia/Jakarta');
         }
 
         return $now->gt($cutoff);
@@ -294,18 +317,18 @@ class DailyAttendanceStatusService
     private function markIncompleteAttendances(Collection $attendances, Teacher $teacher, Carbon $targetDate, string $hari): void
     {
         foreach ($attendances as $attendance) {
-            if (!$attendance->check_in_time || $attendance->check_out_time) {
+            if (! $attendance->check_in_time || $attendance->check_out_time) {
                 continue;
             }
 
-            if (!in_array($attendance->status_kehadiran, ['hadir', 'terlambat'], true)) {
+            if (! in_array($attendance->status_kehadiran, ['hadir', 'terlambat'], true)) {
                 continue;
             }
 
             $session = $attendance->attendanceSession ?: $this->firstActiveSession($teacher);
             $schedule = $attendance->schedule ?: $this->todaySchedule($teacher, $hari);
 
-            if (!$this->shouldMarkIncomplete($targetDate, $session, $schedule)) {
+            if (! $this->shouldMarkIncomplete($targetDate, $session, $schedule)) {
                 continue;
             }
 
@@ -337,8 +360,8 @@ class DailyAttendanceStatusService
         ?WorkSchedule $schedule
     ): Carbon {
         if ($session) {
-            $start = Carbon::parse($targetDate->toDateString() . ' ' . $session->batas_check_out_mulai, 'Asia/Jakarta');
-            $end = Carbon::parse($targetDate->toDateString() . ' ' . $session->batas_check_out_selesai, 'Asia/Jakarta');
+            $start = Carbon::parse($targetDate->toDateString().' '.$session->batas_check_out_mulai, 'Asia/Jakarta');
+            $end = Carbon::parse($targetDate->toDateString().' '.$session->batas_check_out_selesai, 'Asia/Jakarta');
 
             if ($end->lt($start)) {
                 $end->addDay();
@@ -348,10 +371,10 @@ class DailyAttendanceStatusService
         }
 
         if ($schedule) {
-            return Carbon::parse($targetDate->toDateString() . ' ' . $schedule->jam_pulang, 'Asia/Jakarta');
+            return Carbon::parse($targetDate->toDateString().' '.$schedule->jam_pulang, 'Asia/Jakarta');
         }
 
-        return Carbon::parse($targetDate->toDateString() . ' 23:59:59', 'Asia/Jakarta');
+        return Carbon::parse($targetDate->toDateString().' 23:59:59', 'Asia/Jakarta');
     }
 
     private function activeSessions(Teacher $teacher): Collection

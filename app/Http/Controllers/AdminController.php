@@ -23,9 +23,8 @@ class AdminController extends Controller
     public function teachers(Request $request)
     {
         $keyword = $request->keyword;
-        // $perPage = $this->resolvePerPage($request);
 
-        $teachers = Teacher::with(['user', 'attendanceSessions', 'schedules'])
+        $teachers = Teacher::with(['user', 'attendanceSessions', 'schedules', 'faceEnrollment'])
             ->whereHas('user', function ($query) {
                 $query->whereIn('role', Teacher::DATA_GURU_ROLES);
             })
@@ -64,7 +63,14 @@ class AdminController extends Controller
             'jenis_kelamin' => 'required|in:L,P',
             'no_hp' => 'nullable|string|max:20',
             'email' => 'required|email|max:150|unique:users,email',
-            'jabatan' => 'required|in:Kepala Sekolah,Bendahara,Operator, Guru Kelas,Guru Bidang',
+            'jabatan' => ['required', Rule::in([
+                'Kepala Sekolah',
+                'Bendahara',
+                'Operator',
+                'Tenaga Kependidikan',
+                'Guru Kelas',
+                'Guru Bidang',
+            ])],
             'mata_pelajaran' => 'nullable|string|max:100',
         ]);
 
@@ -101,7 +107,7 @@ class AdminController extends Controller
     {
         abort_unless(in_array($teacher->user?->role, Teacher::DATA_GURU_ROLES, true), 404);
 
-        $teacher->load(['attendanceSessions', 'schedules']);
+        $teacher->load(['attendanceSessions', 'schedules', 'faceEnrollment']);
 
         $sessions = AttendanceSession::where('status', 'aktif')
             ->orderBy('jam_masuk')
@@ -125,7 +131,14 @@ class AdminController extends Controller
             'jenis_kelamin' => 'required|in:L,P',
             'no_hp' => 'nullable|string|max:20',
             'email' => 'required|email|unique:users,email,'.$teacher->user_id,
-            'jabatan' => 'required|in:Kepala Sekolah,Bendahara,Operator, Guru Kelas,Guru Bidang',
+            'jabatan' => ['required', Rule::in([
+                'Kepala Sekolah',
+                'Bendahara',
+                'Operator',
+                'Tenaga Kependidikan',
+                'Guru Kelas',
+                'Guru Bidang',
+            ])],
             'mata_pelajaran' => 'nullable|string|max:100',
         ]);
 
@@ -153,6 +166,17 @@ class AdminController extends Controller
         return redirect()
             ->route('admin.teachers', $request->only(['page', 'keyword']))
             ->with('success', 'Data guru berhasil diperbarui.');
+    }
+
+    public function deleteFaceEnrollment(Request $request, Teacher $teacher)
+    {
+        abort_unless(in_array($teacher->user?->role, Teacher::DATA_GURU_ROLES, true), 404);
+
+        $teacher->faceEnrollment()?->delete();
+
+        return redirect()
+            ->route('admin.teachers.edit', array_merge(['teacher' => $teacher], $request->only(['page', 'keyword'])))
+            ->with('success', 'Data wajah '.$teacher->nama_lengkap.' berhasil dihapus.');
     }
 
     private function syncTeacherWorkSchedules(Teacher $teacher, array $days): void
@@ -230,6 +254,7 @@ class AdminController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'radius_meter' => 'required|integer|min:20',
+            'max_gps_accuracy' => 'required|integer|min:20|max:1000',
         ]);
 
         SchoolLocation::updateOrCreate(

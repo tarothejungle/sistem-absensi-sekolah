@@ -37,4 +37,15 @@ return [
         'hostname' => env('TURNSTILE_HOSTNAME'),
     ],
 
+    'face' => [
+        'url' => env('FACE_SERVICE_URL', 'http://fastapi:8001'),
+        'api_key' => env('FACE_SERVICE_API_KEY'),
+        'connect_timeout' => env('FACE_SERVICE_CONNECT_TIMEOUT', 3),
+        'timeout' => env('FACE_SERVICE_TIMEOUT', 15),
+    ],
+
+    'attendance' => [
+        'face_photo_retention_days' => env('ATTENDANCE_FACE_PHOTO_RETENTION_DAYS', 30),
+    ],
+
 ];

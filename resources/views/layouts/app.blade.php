@@ -1167,7 +1167,7 @@
         ],
     ];
 
-    if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah'])) {
+    if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'])) {
         $mobileNavItems[] = [
             'url' => route('attendance.index'),
             'active' => request()->routeIs('attendance.*'),
@@ -1252,7 +1252,7 @@
             'label' => 'Approval Izin/Cuti',
         ];
     } else {
-        if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah'])) {
+        if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'])) {
             $mainSidebarItems[] = [
                 'url' => route('attendance.index'),
                 'active' => request()->routeIs('attendance.*'),
@@ -1261,7 +1261,7 @@
             ];
         }
 
-        if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah'])) {
+        if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'])) {
             $mainSidebarItems[] = [
                 'url' => route('leave.index'),
                 'active' => request()->routeIs('leave.*'),

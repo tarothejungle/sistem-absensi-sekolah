@@ -130,5 +130,9 @@
             </form>
         </div>
     </div>
+
+    @if(in_array($user->role, \App\Models\Teacher::DATA_GURU_ROLES, true) && $user->teacher)
+        @include('profile.partials.face-enrollment')
+    @endif
 </div>
 @endsection

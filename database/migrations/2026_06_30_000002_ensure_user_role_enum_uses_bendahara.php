@@ -12,13 +12,13 @@ return new class extends Migration
             return;
         }
 
-        $this->setRoleEnum(['guru', 'admin', 'bendahara', 'kepala_sekolah', 'super_admin']);
+        $this->setRoleEnum(['guru', 'admin', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan', 'super_admin']);
 
         DB::table('users')
             ->where('role', 'admin')
             ->update(['role' => 'bendahara']);
 
-        $this->setRoleEnum(['guru', 'bendahara', 'kepala_sekolah', 'super_admin']);
+        $this->setRoleEnum(['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan', 'super_admin']);
     }
 
     public function down(): void

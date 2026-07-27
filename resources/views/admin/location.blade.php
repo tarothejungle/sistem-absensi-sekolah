@@ -52,45 +52,60 @@
                 <div class="ui-form-section">
                     <div class="ui-form-section-head">
                         <span class="ui-form-section-icon"><i class="bi bi-broadcast-pin"></i></span>
-                        <div>
-                            <h5 class="ui-form-section-title">Koordinat dan Radius</h5>
-                            <p class="ui-form-section-subtitle">Radius menentukan jarak maksimal guru dapat melakukan absensi dari titik sekolah.</p>
-                        </div>
-                    </div>
-
-                    <div class="row g-3">
-                        <div class="col-md-4 ui-field">
-                            <label class="form-label">Latitude</label>
-                            <input type="text"
-                                   id="latitude"
-                                   name="latitude"
-                                   class="form-control"
-                                   value="{{ old('latitude', $location->latitude ?? '-6.2000000') }}"
-                                   required>
-                        </div>
-
-                        <div class="col-md-4 ui-field">
-                            <label class="form-label">Longitude</label>
-                            <input type="text"
-                                   id="longitude"
-                                   name="longitude"
-                                   class="form-control"
-                                   value="{{ old('longitude', $location->longitude ?? '106.8166660') }}"
-                                   required>
-                        </div>
-
-                        <div class="col-md-4 ui-field">
-                            <label class="form-label">Radius Meter</label>
-                            <input type="number"
-                                   id="radius_meter"
-                                   name="radius_meter"
-                                   class="form-control"
-                                   value="{{ old('radius_meter', $location->radius_meter ?? 150) }}"
-                                   min="10"
-                                   required>
-                        </div>
+                    <div>
+                        <h5 class="ui-form-section-title">Koordinat dan Radius</h5>
+                        <p class="ui-form-section-subtitle">Radius menentukan jarak maksimal guru dapat melakukan absensi dari titik sekolah.</p>
                     </div>
                 </div>
+
+                <div class="row g-3">
+                    <div class="col-md-4 ui-field">
+                        <label class="form-label">Latitude</label>
+                        <input type="text"
+                               id="latitude"
+                               name="latitude"
+                               class="form-control"
+                               value="{{ old('latitude', $location->latitude ?? '-6.2000000') }}"
+                               required>
+                    </div>
+
+                    <div class="col-md-4 ui-field">
+                        <label class="form-label">Longitude</label>
+                        <input type="text"
+                               id="longitude"
+                               name="longitude"
+                               class="form-control"
+                               value="{{ old('longitude', $location->longitude ?? '106.8166660') }}"
+                               required>
+                    </div>
+
+                    <div class="col-md-4 ui-field">
+                        <label class="form-label">Radius Meter</label>
+                        <input type="number"
+                               id="radius_meter"
+                               name="radius_meter"
+                               class="form-control"
+                               value="{{ old('radius_meter', $location->radius_meter ?? 150) }}"
+                               min="10"
+                               required>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-2">
+                    <div class="col-12 ui-field">
+                        <label class="form-label">Akurasi GPS Maksimal (meter)</label>
+                        <input type="number"
+                               id="max_gps_accuracy"
+                               name="max_gps_accuracy"
+                               class="form-control"
+                               value="{{ old('max_gps_accuracy', $location->max_gps_accuracy ?? 100) }}"
+                               min="20"
+                               max="1000"
+                               required>
+                        <small class="text-muted">Nilai akurasi GPS yang lebih tinggi memungkinkan absensi dari laptop/PC (biasanya 100-300 meter). Nilai rendah (20-100 meter) memerlukan HP dengan GPS aktif.</small>
+                    </div>
+                </div>
+            </div>
 
                 <div class="ui-form-actions">
                     <button type="submit" class="btn btn-primary">

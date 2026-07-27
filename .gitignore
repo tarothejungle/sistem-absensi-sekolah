@@ -17,6 +17,9 @@
 /bootstrap/cache/*.php
 !/bootstrap/cache/.gitignore
 /vendor
+__pycache__/
+*.py[cod]
+.pytest_cache/
 .env
 .env.backup
 .env.production
@@ -26,12 +29,6 @@ hosting.env
 *.env
 !.env.example
 
-# Berkas krusial/internal (sengaja tidak dipublikasikan — dikembangkan sendiri)
-/docs/SECURITY-HARDENING.md
-/app/Http/Middleware/SecurityHeaders.php
-/app/Support/ConfigSanitizer.php
-/config/security.php
-/tests/Unit/ConfigSanitizerTest.php
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -43,6 +40,11 @@ yarn-error.log
 /.vscode
 /.agents
 /.codex
+/.claude
+/.codebase-memory.json
+
+# Arsip lokal dapat memuat .env, database, atau data unggahan
+*.zip
 
 # Data nyata, file unggahan, dan cadangan database
 /absensi_guru.sql
@@ -50,6 +52,9 @@ yarn-error.log
 *.sqlite
 *.sqlite3
 *.db
+
+# Seeder akun lokal berisi kredensial khusus lingkungan pengembangan
+/database/seeders/UserSeeder.php
 
 # Foto dan lampiran pengguna
 /profile_photo/

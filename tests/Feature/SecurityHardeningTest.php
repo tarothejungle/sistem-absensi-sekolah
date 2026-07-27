@@ -109,9 +109,9 @@ class SecurityHardeningTest extends TestCase
 
     public function test_face_verification_rejects_non_image_payloads(): void
     {
-        $service = new FaceVerificationService();
+        $service = new FaceVerificationService;
 
-        $this->assertFalse($service->verify('data:image/jpeg;base64,' . base64_encode('not an image')));
+        $this->assertFalse($service->isValidImage('data:image/jpeg;base64,'.base64_encode('not an image')));
     }
 
     public function test_excel_cells_escape_formula_like_values(): void
@@ -126,8 +126,8 @@ class SecurityHardeningTest extends TestCase
 
         $teacher = Teacher::create([
             'user_id' => $user->id,
-            'nama_lengkap' => 'Guru Security Test ' . uniqid(),
-            'email' => uniqid('teacher_', true) . '@example.test',
+            'nama_lengkap' => 'Guru Security Test '.uniqid(),
+            'email' => uniqid('teacher_', true).'@example.test',
         ]);
 
         return [$teacher, $user];
@@ -137,8 +137,8 @@ class SecurityHardeningTest extends TestCase
     {
         $user = User::create([
             'nip' => uniqid('nip_', true),
-            'name' => 'User Security Test ' . uniqid(),
-            'email' => uniqid('security_', true) . '@example.test',
+            'name' => 'User Security Test '.uniqid(),
+            'email' => uniqid('security_', true).'@example.test',
             'password' => Hash::make('password'),
         ]);
 

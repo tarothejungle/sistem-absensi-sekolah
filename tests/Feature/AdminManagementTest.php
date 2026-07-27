@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Exports\TeacherAccountsExport;
 use App\Models\AttendanceSession;
 use App\Models\Teacher;
+use App\Models\TeacherFaceEnrollment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
@@ -111,6 +112,7 @@ class AdminManagementTest extends TestCase
         $this->createTeacherUser('guru', 'Guru Muncul Data Guru Test');
         $this->createTeacherUser('kepala_sekolah', 'Kepala Sekolah Muncul Data Guru Test');
         $this->createTeacherUser('bendahara', 'Bendahara Muncul Data Guru Test');
+        $this->createTeacherUser('tenaga_kependidikan', 'Tenaga Kependidikan Muncul Data Guru Test');
 
         $response = $this
             ->actingAs($admin)
@@ -123,6 +125,8 @@ class AdminManagementTest extends TestCase
         $response->assertSee('Kepala Sekolah');
         $response->assertSee('Bendahara Muncul Data Guru Test');
         $response->assertSee('Bendahara');
+        $response->assertSee('Tenaga Kependidikan Muncul Data Guru Test');
+        $response->assertSee('Tenaga Kependidikan');
     }
 
     public function test_data_admin_only_shows_super_admin_accounts(): void
@@ -166,6 +170,32 @@ class AdminManagementTest extends TestCase
         $this->assertTrue($user->teacher->attendanceSessions->contains($session));
     }
 
+    public function test_super_admin_can_create_tenaga_kependidikan_from_data_guru(): void
+    {
+        $admin = $this->createUser('super_admin', 'Admin Pembuat Tendik Test');
+        $session = $this->createSession('Sesi Tendik Test');
+
+        $response = $this->actingAs($admin)->post(route('admin.teachers.store'), [
+            'nip' => 'tendik_'.uniqid(),
+            'password' => 'Aman123!',
+            'nama_lengkap' => 'Tenaga Kependidikan Baru Test',
+            'role' => 'tenaga_kependidikan',
+            'jenis_kelamin' => 'P',
+            'no_hp' => '081234567890',
+            'email' => uniqid('tendik_', true).'@example.test',
+            'jabatan' => 'Tenaga Kependidikan',
+            'mata_pelajaran' => null,
+            'attendance_session_ids' => [$session->id],
+            'attendance_days' => ['senin', 'selasa'],
+        ]);
+
+        $response->assertRedirect();
+        $user = User::where('name', 'Tenaga Kependidikan Baru Test')->firstOrFail();
+        $this->assertSame('tenaga_kependidikan', $user->role);
+        $this->assertSame('Tenaga Kependidikan', $user->teacher->jabatan);
+        $this->assertTrue($user->teacher->attendanceSessions->contains($session));
+    }
+
     public function test_admin_and_teacher_creation_reject_weak_passwords(): void
     {
         $admin = $this->createUser('super_admin', 'Admin Password Test');
@@ -193,6 +223,28 @@ class AdminManagementTest extends TestCase
                 'attendance_days' => ['senin'],
             ])
             ->assertSessionHasErrors('password');
+    }
+
+    public function test_super_admin_can_reset_teacher_face_enrollment(): void
+    {
+        $admin = $this->createUser('super_admin', 'Admin Enrollment Wajah Test');
+        [$teacher] = $this->createTeacherUser('guru', 'Guru Enrollment Wajah Test');
+        TeacherFaceEnrollment::create([
+            'teacher_id' => $teacher->id,
+            'face_descriptor' => array_fill(0, TeacherFaceEnrollment::EMBEDDING_DIMENSIONS, 0.02),
+            'model_version' => TeacherFaceEnrollment::MODEL_VERSION,
+            'recapture_count' => 3,
+            'enrolled_by' => $admin->id,
+            'enrolled_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.teachers.face-enrollment.delete', $teacher))
+            ->assertRedirect(route('admin.teachers.edit', $teacher));
+
+        $this->assertDatabaseMissing('teacher_face_enrollments', [
+            'teacher_id' => $teacher->id,
+        ]);
     }
 
     private function createSession(string $name): AttendanceSession

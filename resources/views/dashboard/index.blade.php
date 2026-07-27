@@ -15,7 +15,7 @@
 @endphp
 <div class="container-fluid">
 
-    @if(in_array($role, ['guru', 'bendahara', 'kepala_sekolah']))
+    @if(in_array($role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan']))
         @php
             $user = auth()->user();
             $namaGuru = $teacher->nama_lengkap ?? $user->name ?? $user->nip;

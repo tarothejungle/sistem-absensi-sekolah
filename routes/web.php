@@ -1,21 +1,20 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceSessionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\AttendanceController;
-use App\Http\Controllers\LeaveRequestController;
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\ReportController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\Admin\LocationController;
-use App\Http\Controllers\InfalReportController;
-use App\Http\Controllers\PasswordResetController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PayrollController;
-use App\Http\Controllers\HolidaySettingController;
 use App\Http\Controllers\DutyScheduleController;
+use App\Http\Controllers\HolidaySettingController;
+use App\Http\Controllers\InfalReportController;
+use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('login'));
 
@@ -44,12 +43,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.readAll');
 
-    Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::middleware(['active', 'role:guru,bendahara,kepala_sekolah,tenaga_kependidikan'])->group(function () {
+        Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+        Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])
+            ->middleware('throttle:10,1')
+            ->name('attendance.checkin');
+        Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])
+            ->middleware('throttle:10,1')
+            ->name('attendance.checkout');
+    });
     Route::get('/attendance/photos/{attendance}/{type}', [AttendanceController::class, 'photo'])
+        ->middleware('active')
         ->whereIn('type', ['check-in', 'check-out'])
         ->name('attendance.photo.show');
-    Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])->name('attendance.checkin');
-    Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('attendance.checkout');
 
     Route::get('/leave', [LeaveRequestController::class, 'index'])->name('leave.index');
     Route::get('/leave/create', [LeaveRequestController::class, 'create'])->name('leave.create');
@@ -72,6 +78,9 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::post('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
+    Route::post('/profile/face-enrollment', [ProfileController::class, 'storeFaceEnrollment'])
+        ->middleware('throttle:5,1')
+        ->name('profile.face-enrollment.store');
 
     Route::get('/profile/password', [ProfileController::class, 'password'])->name('profile.password.form');
     Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
@@ -84,6 +93,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/admin/teachers', [AdminController::class, 'storeTeacher'])->name('admin.teachers.store');
         Route::get('/admin/teachers/{teacher}/edit', [AdminController::class, 'editTeacher'])->name('admin.teachers.edit');
         Route::put('/admin/teachers/{teacher}', [AdminController::class, 'updateTeacher'])->name('admin.teachers.update');
+        Route::delete('/admin/teachers/{teacher}/face-enrollment', [AdminController::class, 'deleteFaceEnrollment'])
+            ->name('admin.teachers.face-enrollment.delete');
         Route::delete('/admin/teachers/bulk-delete', [AdminController::class, 'bulkDeleteTeachers'])->name('admin.teachers.bulk-delete');
         Route::delete('/admin/teachers/{teacher}', [AdminController::class, 'deleteTeacher'])->name('admin.teachers.delete');
         Route::get('/admin/teachers/export/excel', [AdminController::class, 'exportTeacherAccountsExcel'])->name('admin.teachers.export.excel');
@@ -147,7 +158,6 @@ Route::middleware('auth')->group(function () {
         Route::delete('/admin/duty-schedules/{dutySchedule}', [DutyScheduleController::class, 'destroy'])
             ->name('admin.duty-schedules.destroy');
     });
-
 
     Route::middleware('role:bendahara,super_admin')->group(function () {
         Route::get('/payroll', [PayrollController::class, 'index'])->name('payroll.index');

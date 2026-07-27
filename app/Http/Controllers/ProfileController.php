@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Teacher;
+use App\Services\FaceVerificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 class ProfileController extends Controller
 {
@@ -11,7 +15,67 @@ class ProfileController extends Controller
     {
         $user = auth()->user();
 
+        $user->load('teacher.faceEnrollment');
+
         return view('profile.edit', compact('user'));
+    }
+
+    public function storeFaceEnrollment(Request $request, FaceVerificationService $face)
+    {
+        $user = $request->user();
+
+        abort_unless(in_array($user->role, Teacher::DATA_GURU_ROLES, true) && $user->teacher, 403);
+
+        $data = $request->validate([
+            'face_image' => 'required|string|max:4000000',
+        ]);
+
+        $currentEnrollment = $user->teacher->faceEnrollment;
+        if ($currentEnrollment && ! $currentEnrollment->canRecapture()) {
+            return back()->withErrors([
+                'face_image' => 'Batas maksimal 3 kali recapture telah tercapai. Hubungi super admin untuk mereset data wajah.',
+            ]);
+        }
+
+        try {
+            $result = $face->enroll($data['face_image']);
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['face_image' => $exception->getMessage()]);
+        }
+
+        $saved = DB::transaction(function () use ($user, $result): bool {
+            $teacher = Teacher::query()->lockForUpdate()->findOrFail($user->teacher->id);
+            $enrollment = $teacher->faceEnrollment()->first();
+
+            if ($enrollment && ! $enrollment->canRecapture()) {
+                return false;
+            }
+
+            $teacher->faceEnrollment()->updateOrCreate(
+                [],
+                [
+                    'face_descriptor' => $result['embedding'],
+                    'model_version' => $result['model_version'],
+                    'recapture_count' => $enrollment ? $enrollment->recapture_count + 1 : 0,
+                    'enrolled_by' => $user->id,
+                    'enrolled_at' => now(),
+                ]
+            );
+
+            return true;
+        });
+
+        if (! $saved) {
+            return back()->withErrors([
+                'face_image' => 'Batas maksimal 3 kali recapture telah tercapai. Hubungi super admin untuk mereset data wajah.',
+            ]);
+        }
+
+        return redirect()
+            ->route('profile.edit')
+            ->with('success', $currentEnrollment
+                ? 'Data wajah berhasil di-recapture.'
+                : 'Wajah berhasil didaftarkan untuk absensi.');
     }
 
     public function updateProfile(Request $request)
@@ -51,7 +115,7 @@ class ProfileController extends Controller
 
         $user->update($data);
 
-        if ($user->role === 'guru' && $user->teacher) {
+        if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'], true) && $user->teacher) {
             $user->teacher->update([
                 'nama_lengkap' => $request->name,
             ]);
@@ -95,7 +159,7 @@ class ProfileController extends Controller
 
         $user = auth()->user();
 
-        if (!Hash::check($request->old_password, $user->password)) {
+        if (! Hash::check($request->old_password, $user->password)) {
             return back()->with('error', 'Password lama tidak sesuai.');
         }
 
@@ -109,21 +173,21 @@ class ProfileController extends Controller
 
     private function storePublicFile($file, string $folder): string
     {
-        $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+        $fileName = time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
         $destinationPath = public_path($folder);
 
-        if (!is_dir($destinationPath)) {
+        if (! is_dir($destinationPath)) {
             mkdir($destinationPath, 0755, true);
         }
 
         $file->move($destinationPath, $fileName);
 
-        return $folder . '/' . $fileName;
+        return $folder.'/'.$fileName;
     }
 
     private function deletePublicFile(?string $relativePath): void
     {
-        if (!$relativePath) {
+        if (! $relativePath) {
             return;
         }
 

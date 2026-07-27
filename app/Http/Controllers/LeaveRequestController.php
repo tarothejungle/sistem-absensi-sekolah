@@ -20,7 +20,7 @@ class LeaveRequestController extends Controller
 
         $query = LeaveRequest::with(['teacher.user', 'infalTeacher.user', 'approver']);
 
-        if (in_array($user->role, ['guru', 'bendahara'])) {
+        if (in_array($user->role, ['guru', 'bendahara', 'tenaga_kependidikan'])) {
             $teacher = $user->teacher;
 
             if (!$teacher) {
@@ -49,7 +49,7 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $teacher = $user->teacher;
 
-        if (!in_array($user->role, ['guru', 'bendahara'])) {
+        if (!in_array($user->role, ['guru', 'bendahara', 'tenaga_kependidikan'])) {
             abort(403);
         }
 
@@ -70,7 +70,7 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        if (in_array($user->role, ['guru', 'bendahara'])) {
+        if (in_array($user->role, ['guru', 'bendahara', 'tenaga_kependidikan'])) {
             $teacher = $user->teacher;
 
             if (!$teacher || $leave->teacher_id != $teacher->id) {
@@ -188,7 +188,7 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        if (in_array($user->role, ['guru', 'bendahara'])) {
+        if (in_array($user->role, ['guru', 'bendahara', 'tenaga_kependidikan'])) {
             $teacher = $user->teacher;
 
             if (!$teacher || $leave->teacher_id !== $teacher->id) {
@@ -220,7 +220,7 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $teacher = $user->teacher;
 
-        if (!in_array($user->role, ['guru', 'bendahara'])) {
+        if (!in_array($user->role, ['guru', 'bendahara', 'tenaga_kependidikan'])) {
             abort(403);
         }
 
@@ -449,7 +449,7 @@ class LeaveRequestController extends Controller
 
         $isAdmin = in_array($user->role, ['super_admin', 'kepala_sekolah']);
 
-        if (in_array($user->role, ['guru', 'bendahara'], true)) {
+        if (in_array($user->role, ['guru', 'bendahara', 'tenaga_kependidikan'], true)) {
             $teacher = $user->teacher;
 
             if (!$teacher || ($leave->teacher_id != $teacher->id && $leave->infal_teacher_id != $teacher->id)) {

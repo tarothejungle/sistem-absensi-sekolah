@@ -119,6 +119,7 @@
                         <option value="Kepala Sekolah" @selected(old('jabatan', $teacher?->jabatan) === 'Kepala Sekolah')>Kepala Sekolah</option>
                         <option value="Bendahara" @selected(old('jabatan', $teacher?->jabatan) === 'Bendahara')>Bendahara</option>
                         <option value="Operator" @selected(old('jabatan', $teacher?->jabatan) === 'Operator')>Operator</option>
+                        <option value="Tenaga Kependidikan" @selected(old('jabatan', $teacher?->jabatan) === 'Tenaga Kependidikan')>Tenaga Kependidikan</option>
                         <option value="Guru Kelas" @selected(old('jabatan', $teacher?->jabatan) === 'Guru Kelas')>Guru Kelas</option>
                         <option value="Guru Bidang" @selected(old('jabatan', $teacher?->jabatan) === 'Guru Bidang')>Guru Bidang</option>
                     </select>
@@ -184,6 +185,46 @@
             </div>
         </div>
     </form>
+
+    @if($teacher)
+        <div class="card ui-form-card mt-4">
+            <div class="card-body">
+                <div class="ui-section-title">
+                    <i class="bi bi-person-bounding-box"></i>
+                    <span>Data Wajah Absensi</span>
+                </div>
+
+                <p class="text-muted mb-3">Pendaftaran dan recapture dilakukan oleh pemilik akun melalui menu profil. Super admin hanya dapat mereset data wajah.</p>
+
+                @if($teacher->faceEnrollment?->isCompatible())
+                    <div class="alert alert-success d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span>
+                            <i class="bi bi-check-circle me-1"></i>
+                            Wajah terdaftar pada {{ $teacher->faceEnrollment->enrolled_at?->format('d/m/Y H:i') }}.
+                            Recapture terpakai {{ $teacher->faceEnrollment->recapture_count }}/{{ \App\Models\TeacherFaceEnrollment::MAX_RECAPTURES }}.
+                        </span>
+                        <form method="POST" action="{{ route('admin.teachers.face-enrollment.delete', array_merge(['teacher' => $teacher], request()->query())) }}" onsubmit="return confirm('Hapus data wajah terdaftar? Guru/karyawan tidak dapat absensi sampai didaftarkan lagi.');">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Reset Data Wajah</button>
+                        </form>
+                    </div>
+                @elseif($teacher->faceEnrollment)
+                    <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span><i class="bi bi-exclamation-triangle me-1"></i> Template wajah tidak kompatibel. Reset agar pemilik akun dapat mendaftar ulang.</span>
+                        <form method="POST" action="{{ route('admin.teachers.face-enrollment.delete', array_merge(['teacher' => $teacher], request()->query())) }}">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Reset Data Wajah</button>
+                        </form>
+                    </div>
+                @else
+                    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i> Wajah belum terdaftar. Akun ini belum bisa melakukan absensi wajah.</div>
+                @endif
+
+            </div>
+        </div>
+    @endif
 </div>
 @endsection
 

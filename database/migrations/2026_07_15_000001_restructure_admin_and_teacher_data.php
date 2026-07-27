@@ -10,7 +10,7 @@ return new class extends Migration
     public function up(): void
     {
         DB::table('users')
-            ->whereIn('role', ['guru', 'kepala_sekolah', 'bendahara'])
+            ->whereIn('role', ['guru', 'kepala_sekolah', 'bendahara', 'tenaga_kependidikan'])
             ->orderBy('id')
             ->lazy()
             ->each(function (object $user): void {

@@ -10,12 +10,13 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Teacher extends Model
 {
-    public const DATA_GURU_ROLES = ['guru', 'kepala_sekolah', 'bendahara'];
+    public const DATA_GURU_ROLES = ['guru', 'kepala_sekolah', 'bendahara', 'tenaga_kependidikan'];
 
     public const DATA_GURU_ROLE_LABELS = [
         'guru' => 'Guru',
         'kepala_sekolah' => 'Kepala Sekolah',
         'bendahara' => 'Bendahara',
+        'tenaga_kependidikan' => 'Tenaga Kependidikan',
     ];
 
     protected $fillable = ['user_id', 'nama_lengkap', 'jenis_kelamin', 'no_hp', 'jabatan', 'mata_pelajaran'];
@@ -62,6 +63,11 @@ class Teacher extends Model
     public function dutySchedules(): BelongsToMany
     {
         return $this->belongsToMany(DutySchedule::class, 'duty_schedule_teacher')->withTimestamps();
+    }
+
+    public function faceEnrollment(): HasOne
+    {
+        return $this->hasOne(TeacherFaceEnrollment::class);
     }
 
     public function attendanceSessions()

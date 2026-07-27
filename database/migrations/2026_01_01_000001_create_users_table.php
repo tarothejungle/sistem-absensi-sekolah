@@ -18,6 +18,7 @@ return new class extends Migration
                 'guru',
                 'bendahara',
                 'kepala_sekolah',
+                'tenaga_kependidikan',
                 'super_admin',
             ])->default('guru');
 

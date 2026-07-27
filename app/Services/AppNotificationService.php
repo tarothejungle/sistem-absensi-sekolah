@@ -83,7 +83,7 @@ class AppNotificationService
 
     private static function attendanceReminder(User $user): Collection
     {
-        if (!in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah'], true)) {
+        if (!in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'], true)) {
             return collect();
         }
 

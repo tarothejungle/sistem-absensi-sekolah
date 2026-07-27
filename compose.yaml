@@ -1,0 +1,30 @@
+services:
+  face-api:
+    build:
+      context: ./face-service
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      API_KEY: "${FACE_SERVICE_API_KEY:?Set FACE_SERVICE_API_KEY in .env}"
+      MODEL_DIR: /models
+      MODEL_NAME: buffalo_l
+      MODEL_VERSION: insightface-buffalo_l-v1
+      MATCH_THRESHOLD: "0.45"
+      OMP_NUM_THREADS: "2"
+      ORT_NUM_THREADS: "2"
+    volumes:
+      - face-models:/models
+    mem_limit: 2g
+    cpus: 1.75
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  face-models:

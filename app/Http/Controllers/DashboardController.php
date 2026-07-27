@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Attendance;
-use App\Models\Teacher;
 use App\Models\LoginActivity;
+use App\Models\Teacher;
 use App\Services\DailyAttendanceStatusService;
 
 class DashboardController extends Controller
@@ -17,7 +16,7 @@ class DashboardController extends Controller
         $today = now('Asia/Jakarta')->toDateString();
 
         // DASHBOARD KHUSUS GURU
-        if ($role === 'guru') {
+        if (in_array($role, ['guru', 'tenaga_kependidikan'], true)) {
             $teacher = $user->teacher;
 
             if ($teacher) {
@@ -84,6 +83,7 @@ class DashboardController extends Controller
 
         // AKTIVITAS LOGIN USER
         $loginActivities = LoginActivity::latest()
+            ->where('created_at', '>', now()->subHours(24))
             ->limit(10)
             ->get();
 
