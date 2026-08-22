@@ -26,13 +26,13 @@
                 <div class="profile-edit-preview">
                     @if($user->profile_photo)
                         <img
-                            src="{{ asset($user->profile_photo) }}"
+                            src="{{ route('profile.photo.show', $user) }}"
                             alt="Foto Profil"
                             class="profile-edit-avatar"
                         >
                     @else
                         <div class="profile-edit-avatar">
-                            {{ strtoupper(substr($user->name ?? $user->nip, 0, 1)) }}
+                            {{ strtoupper(substr($user->name ?? $user->username, 0, 1)) }}
                         </div>
                     @endif
 
@@ -60,7 +60,7 @@
 
                         <div class="col-md-6 ui-field">
                             <label class="form-label">Username</label>
-                            <input type="text" class="form-control" value="{{ $user->nip }}" readonly>
+                            <input type="text" class="form-control" value="{{ $user->username }}" readonly>
                         </div>
 
                         <div class="col-md-6 ui-field">

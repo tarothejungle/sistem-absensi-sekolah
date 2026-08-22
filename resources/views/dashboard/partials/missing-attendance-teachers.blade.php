@@ -32,7 +32,7 @@
                         @foreach($guruBelumAbsen as $teacher)
                             <tr>
                                 <td>{{ $teacher->nama_lengkap ?? '-' }}</td>
-                                <td>{{ $teacher->user->nip ?? '-' }}</td>
+                                <td>{{ $teacher->user->username ?? '-' }}</td>
                                 <td>
                                     @if($teacher->attendanceSessions && $teacher->attendanceSessions->count() > 0)
                                         <div class="d-flex flex-wrap gap-2">

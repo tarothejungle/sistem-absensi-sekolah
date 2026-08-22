@@ -3,13 +3,12 @@
 namespace Tests\Unit;
 
 use App\Support\ConfigSanitizer;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class ConfigSanitizerTest extends TestCase
 {
-    /**
-     * @dataProvider sessionDomainProvider
-     */
+    #[DataProvider('sessionDomainProvider')]
     public function test_session_domain_is_normalized(?string $input, ?string $expected): void
     {
         $this->assertSame($expected, ConfigSanitizer::sessionDomain($input));

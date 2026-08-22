@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\LoginActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
-use App\Models\LoginActivity;
 
 class AuthController extends Controller
 {
@@ -17,17 +17,70 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $validated = $request->validate([
-            'nip' => ['required', 'string'],
+        $rules = [
+            'username' => ['required', 'string'],
             'password' => ['required', 'string'],
-            'cf-turnstile-response' => ['required', 'string'],
-        ], [
-            'nip.required' => 'Username wajib diisi.',
-            'password.required' => 'Password wajib diisi.',
-            'cf-turnstile-response.required' =>
-                'Silakan selesaikan verifikasi keamanan terlebih dahulu.',
+        ];
+
+        if (config('services.turnstile.enabled')) {
+            $rules['cf-turnstile-response'] = ['required', 'string'];
+        }
+
+        $validated = $request->validate($rules, [
+            'username.required' => 'Masukkan username Anda.',
+            'password.required' => 'Masukkan kata sandi Anda.',
+            'cf-turnstile-response.required' => 'Silakan selesaikan verifikasi keamanan terlebih dahulu.',
         ]);
 
+        if (config('services.turnstile.enabled')) {
+            $this->validateTurnstile($request);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Proses autentikasi
+        |--------------------------------------------------------------------------
+        */
+
+        $loginSuccess = Auth::attempt([
+            'username' => $validated['username'],
+            'password' => $validated['password'],
+            'status' => 'aktif',
+        ], $request->boolean('remember'));
+
+        if (! $loginSuccess) {
+            return back()
+                ->withErrors([
+                    'credentials' => 'Username atau kata sandi tidak cocok. Periksa kembali lalu coba lagi.',
+                ])
+                ->onlyInput('username');
+        }
+
+        $request->session()->regenerate();
+        $request->session()->put('auth.last_activity_at', time());
+
+        $user = Auth::user();
+
+        $user->update([
+            'last_login' => now(),
+        ]);
+
+        LoginActivity::create([
+            'user_id' => $user->id,
+            'name' => $user->name ?? $user->username,
+            'role' => $user->role,
+            'activity' => 'login ke dalam aplikasi',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()
+            ->route('dashboard')
+            ->with('success', 'Login berhasil.');
+    }
+
+    private function validateTurnstile(Request $request): void
+    {
         try {
             $response = Http::asForm()
                 ->connectTimeout(5)
@@ -48,8 +101,7 @@ class AuthController extends Controller
             report($exception);
 
             throw ValidationException::withMessages([
-                'cf-turnstile-response' =>
-                    'Layanan verifikasi keamanan sedang tidak dapat dihubungi. Silakan coba kembali.',
+                'cf-turnstile-response' => 'Layanan verifikasi keamanan sedang tidak dapat dihubungi. Silakan coba kembali.',
             ]);
         }
 
@@ -78,60 +130,29 @@ class AuthController extends Controller
             ]);
 
             throw ValidationException::withMessages([
-                'cf-turnstile-response' =>
-                    'Verifikasi keamanan gagal atau telah kedaluwarsa. Silakan coba kembali.',
+                'cf-turnstile-response' => 'Verifikasi keamanan gagal atau telah kedaluwarsa. Silakan coba kembali.',
             ]);
         }
+    }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Proses autentikasi
-        |--------------------------------------------------------------------------
-        */
-
-        $loginSuccess = Auth::attempt([
-            'nip' => $validated['nip'],
-            'password' => $validated['password'],
-            'status' => 'aktif',
-        ], $request->boolean('remember'));
-
-        if (! $loginSuccess) {
-            return back()
-                ->withErrors([
-                    'nip' => 'Username atau password tidak sesuai.',
-                ])
-                ->onlyInput('nip');
-        }
-
-        $request->session()->regenerate();
-
-        $user = Auth::user();
-
-        $user->update([
-            'last_login' => now(),
-        ]);
-
-        LoginActivity::create([
-            'user_id' => $user->id,
-            'name' => $user->name ?? $user->nip,
-            'role' => $user->role,
-            'activity' => 'login ke dalam aplikasi',
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
-
-        return redirect()
-            ->route('dashboard')
-            ->with('success', 'Login berhasil.');
+    public function heartbeat()
+    {
+        return response()->noContent();
     }
 
     public function logout(Request $request)
     {
+        $expired = $request->input('reason') === 'idle';
+
         Auth::logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        if ($request->expectsJson()) {
+            return response()->noContent();
+        }
+
+        return redirect()->route('login', $expired ? ['expired' => 1] : []);
     }
 }

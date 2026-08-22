@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Attendance;
 use App\Models\AttendanceSession;
+use App\Models\BiometricLivenessChallenge;
 use App\Models\SchoolLocation;
 use App\Models\Teacher;
 use App\Models\TeacherFaceEnrollment;
@@ -14,11 +15,13 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\InteractsWithLiveness;
 use Tests\TestCase;
 
 class AttendanceStatusTest extends TestCase
 {
     use DatabaseTransactions;
+    use InteractsWithLiveness;
 
     protected function tearDown(): void
     {
@@ -50,8 +53,7 @@ class AttendanceStatusTest extends TestCase
                 'latitude' => -6.20000000,
                 'longitude' => 106.81666600,
                 'accuracy' => 250,
-                'face_image' => 'data:image/jpeg;base64,'.base64_encode('fake-image'),
-                'face_match_score' => 0.2,
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
             ]);
 
         $response->assertSessionHas('error');
@@ -77,9 +79,35 @@ class AttendanceStatusTest extends TestCase
                 'attendance_session_id' => $session->id,
                 'latitude' => -91,
                 'longitude' => 181,
-                'face_image' => $this->validFaceImage(),
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
             ])
             ->assertSessionHasErrors(['latitude', 'longitude', 'accuracy']);
+
+        Http::assertNothingSent();
+        $this->assertDatabaseMissing('attendances', [
+            'teacher_id' => $teacher->id,
+            'attendance_session_id' => $session->id,
+        ]);
+    }
+
+    public function test_check_in_requires_a_face_image(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
+
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+        $this->activateOnlyTestLocation();
+        Http::fake();
+
+        $this->actingAs($user)
+            ->post(route('attendance.checkin'), [
+                'attendance_session_id' => $session->id,
+                'latitude' => -6.20000000,
+                'longitude' => 106.81666600,
+                'accuracy' => 15,
+            ])
+            ->assertSessionHasErrors('face_image');
 
         Http::assertNothingSent();
         $this->assertDatabaseMissing('attendances', [
@@ -92,7 +120,7 @@ class AttendanceStatusTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
         Storage::fake('local');
-        $this->fakeMatchedFace(0.2);
+        $this->fakeFaceVerification(true, 0.2);
 
         [$teacher, $user] = $this->createTeacherUser();
         $session = $this->createSession();
@@ -114,7 +142,7 @@ class AttendanceStatusTest extends TestCase
                 'latitude' => -6.19950000,
                 'longitude' => 106.81666600,
                 'accuracy' => 100,
-                'face_image' => $this->validFaceImage(),
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
             ])
             ->assertSessionHas('error');
 
@@ -129,7 +157,7 @@ class AttendanceStatusTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
 
         $admin = User::create([
-            'nip' => uniqid('admin_', true),
+            'username' => uniqid('admin_', true),
             'name' => 'Admin Test',
             'email' => uniqid('admin_', true).'@example.test',
             'password' => Hash::make('password'),
@@ -177,7 +205,7 @@ class AttendanceStatusTest extends TestCase
                 'latitude' => -6.20000000,
                 'longitude' => 106.81666600,
                 'accuracy' => 15,
-                'face_image' => $this->validFaceImage(),
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
             ])
             ->assertSessionHas('error', 'Anda sudah check-in untuk '.$session->nama_sesi.'.');
 
@@ -189,7 +217,7 @@ class AttendanceStatusTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
         Storage::fake('local');
-        $this->fakeMatchedFace(0.2345);
+        $this->fakeFaceVerification(true, 0.2345);
 
         [$teacher, $user] = $this->createTeacherUser();
         $session = $this->createSession();
@@ -204,7 +232,7 @@ class AttendanceStatusTest extends TestCase
                 'latitude' => -6.20000000,
                 'longitude' => 106.81666600,
                 'accuracy' => 15,
-                'face_image' => $this->validFaceImage(),
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
             ]);
 
         $response->assertSessionHas('success');
@@ -220,16 +248,73 @@ class AttendanceStatusTest extends TestCase
         $this->assertSame('hadir', $attendance->status_kehadiran);
         $this->assertSame('face_match_fastapi', $attendance->verification_method);
         $this->assertEquals(0.2345, $attendance->check_in_face_match_score);
+        $this->assertNull($attendance->check_in_liveness_challenge_id);
+        $this->assertDatabaseMissing('biometric_liveness_challenges', [
+            'teacher_id' => $teacher->id,
+            'purpose' => BiometricLivenessChallenge::PURPOSE_CHECK_IN,
+        ]);
         Http::assertSent(fn ($request) => $request->url() === config('services.face.url').'/api/v1/faces/verify'
             && $request->hasHeader('X-API-Key')
-            && count($request['embedding']) === TeacherFaceEnrollment::EMBEDDING_DIMENSIONS);
+            && count($request['embedding']) === TeacherFaceEnrollment::EMBEDDING_DIMENSIONS
+            && is_string($request['image']));
+    }
+
+    public function test_required_liveness_check_in_consumes_bound_challenge(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
+        config()->set('biometrics.liveness_required', true);
+        Storage::fake('local');
+        $this->fakeLivenessVerification(true, 0.2123);
+
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+        $this->activateOnlyTestLocation();
+        $liveness = $this->livenessPayload(
+            $user,
+            $teacher,
+            BiometricLivenessChallenge::PURPOSE_CHECK_IN,
+            $session->id,
+        );
+
+        $this->actingAs($user)->post(route('attendance.checkin'), [
+            'attendance_session_id' => $session->id,
+            'latitude' => -6.20000000,
+            'longitude' => 106.81666600,
+            'accuracy' => 15,
+            ...$liveness,
+        ])->assertSessionHas('success');
+
+        $attendance = Attendance::where('teacher_id', $teacher->id)->firstOrFail();
+        $this->assertSame('face_liveness_fastapi', $attendance->verification_method);
+        $this->assertSame($liveness['liveness_challenge_id'], $attendance->check_in_liveness_challenge_id);
+        $this->assertDatabaseHas('biometric_liveness_challenges', [
+            'id' => $liveness['liveness_challenge_id'],
+            'status' => BiometricLivenessChallenge::STATUS_PASSED,
+        ]);
+    }
+
+    public function test_required_liveness_rejects_missing_challenge(): void
+    {
+        config()->set('biometrics.liveness_required', true);
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+
+        $this->actingAs($user)->postJson(route('attendance.checkin'), [
+            'attendance_session_id' => $session->id,
+            'latitude' => -6.20000000,
+            'longitude' => 106.81666600,
+            'accuracy' => 15,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['liveness_challenge_id', 'liveness_frames']);
     }
 
     public function test_check_out_success_after_check_in(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-30 12:30:00', 'Asia/Jakarta'));
         Storage::fake('local');
-        $this->fakeMatchedFace(0.1987);
+        $this->fakeFaceVerification(true, 0.1987);
 
         [$teacher, $user] = $this->createTeacherUser();
         $session = $this->createSession();
@@ -254,7 +339,7 @@ class AttendanceStatusTest extends TestCase
                 'latitude' => -6.20000000,
                 'longitude' => 106.81666600,
                 'accuracy' => 15,
-                'face_image' => $this->validFaceImage(),
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_OUT, $session->id),
             ]);
 
         $response->assertSessionHas('success');
@@ -264,6 +349,11 @@ class AttendanceStatusTest extends TestCase
 
         $this->assertNotNull($attendance->check_out_time);
         $this->assertEquals(0.1987, $attendance->check_out_face_match_score);
+        $this->assertNull($attendance->check_out_liveness_challenge_id);
+        $this->assertDatabaseMissing('biometric_liveness_challenges', [
+            'teacher_id' => $teacher->id,
+            'purpose' => BiometricLivenessChallenge::PURPOSE_CHECK_OUT,
+        ]);
     }
 
     public function test_check_in_rejects_user_without_face_enrollment(): void
@@ -281,8 +371,7 @@ class AttendanceStatusTest extends TestCase
                 'latitude' => -6.20000000,
                 'longitude' => 106.81666600,
                 'accuracy' => 15,
-                'face_image' => $this->validFaceImage(),
-                'face_match_score' => 0.2,
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
             ])
             ->assertSessionHas('error', 'Wajah belum didaftarkan. Hubungi admin untuk pendaftaran wajah.');
     }
@@ -291,19 +380,7 @@ class AttendanceStatusTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
         Storage::fake('local');
-        config([
-            'services.face.url' => 'http://127.0.0.1:8001',
-            'services.face.api_key' => 'test-secret',
-        ]);
-        Http::fake([
-            '*' => Http::response([
-                'matched' => false,
-                'distance' => 0.81,
-                'threshold' => 0.45,
-                'faces_detected' => 1,
-                'model_version' => TeacherFaceEnrollment::MODEL_VERSION,
-            ]),
-        ]);
+        $this->fakeFaceVerification(false, 0.81);
 
         [$teacher, $user] = $this->createTeacherUser();
         $session = $this->createSession();
@@ -316,8 +393,7 @@ class AttendanceStatusTest extends TestCase
                 'latitude' => -6.20000000,
                 'longitude' => 106.81666600,
                 'accuracy' => 15,
-                'face_image' => $this->validFaceImage(),
-                'face_match_score' => 0.01,
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
             ])
             ->assertSessionHas('error', 'Wajah tidak cocok dengan data terdaftar. Pastikan wajah menghadap kamera lalu coba lagi.');
 
@@ -326,6 +402,91 @@ class AttendanceStatusTest extends TestCase
             'attendance_session_id' => $session->id,
             'tanggal' => '2026-06-30',
         ]);
+    }
+
+    public function test_check_in_json_returns_structured_biometric_failure(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
+        config([
+            'services.face.url' => 'http://127.0.0.1:8001',
+            'services.face.api_key' => 'test-secret',
+        ]);
+        Http::fake(['*' => Http::response([
+            'matched' => false,
+            'distance' => 0.81,
+            'threshold' => 0.45,
+            'faces_detected' => 1,
+            'model_version' => TeacherFaceEnrollment::MODEL_VERSION,
+        ])]);
+
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+        $this->activateOnlyTestLocation();
+
+        $this->actingAs($user)
+            ->postJson(route('attendance.checkin'), [
+                'attendance_session_id' => $session->id,
+                'latitude' => -6.20000000,
+                'longitude' => 106.81666600,
+                'accuracy' => 15,
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'face_mismatch')
+            ->assertJsonPath('stage', 'biometric')
+            ->assertJsonPath('retryable', true);
+    }
+
+    public function test_check_in_rejects_occluded_face_without_saving_attendance_or_photo(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
+        Storage::fake('local');
+        config([
+            'services.face.url' => 'http://127.0.0.1:8001',
+            'services.face.api_key' => 'test-secret',
+        ]);
+        Http::fake([
+            '*/api/v1/faces/verify' => Http::response([
+                'detail' => [
+                    'code' => 'face_occluded',
+                    'message' => 'Mata, hidung, dan mulut harus terlihat jelas tanpa tertutup benda.',
+                    'faces_detected' => 1,
+                ],
+            ], 422),
+        ]);
+
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+        $this->activateOnlyTestLocation();
+
+        $this->actingAs($user)
+            ->postJson(route('attendance.checkin'), [
+                'attendance_session_id' => $session->id,
+                'latitude' => -6.20000000,
+                'longitude' => 106.81666600,
+                'accuracy' => 15,
+                ...$this->livenessPayload(
+                    $user,
+                    $teacher,
+                    BiometricLivenessChallenge::PURPOSE_CHECK_IN,
+                    $session->id,
+                ),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'face_occluded')
+            ->assertJsonPath('stage', 'biometric')
+            ->assertJsonPath('retryable', true);
+
+        $this->assertDatabaseMissing('attendances', [
+            'teacher_id' => $teacher->id,
+            'attendance_session_id' => $session->id,
+            'tanggal' => '2026-06-30',
+        ]);
+        $this->assertSame([], Storage::disk('local')->allFiles('attendance_faces'));
     }
 
     public function test_check_in_rejects_when_face_service_is_unavailable(): void
@@ -348,9 +509,42 @@ class AttendanceStatusTest extends TestCase
                 'latitude' => -6.20000000,
                 'longitude' => 106.81666600,
                 'accuracy' => 15,
-                'face_image' => $this->validFaceImage(),
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
             ])
             ->assertSessionHas('error', 'Layanan verifikasi wajah sedang tidak tersedia. Silakan coba kembali.');
+
+        $this->assertDatabaseMissing('attendances', [
+            'teacher_id' => $teacher->id,
+            'attendance_session_id' => $session->id,
+            'tanggal' => '2026-06-30',
+        ]);
+    }
+
+    public function test_check_in_reports_face_service_contract_mismatch(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 07:00:00', 'Asia/Jakarta'));
+        config([
+            'services.face.url' => 'http://127.0.0.1:8001',
+            'services.face.api_key' => 'test-secret',
+        ]);
+        Http::fake(['*' => Http::response([
+            'detail' => 'Legacy face endpoint disabled',
+        ], 410)]);
+
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+        $this->activateOnlyTestLocation();
+
+        $this->actingAs($user)
+            ->post(route('attendance.checkin'), [
+                'attendance_session_id' => $session->id,
+                'latitude' => -6.20000000,
+                'longitude' => 106.81666600,
+                'accuracy' => 15,
+                ...$this->livenessPayload($user, $teacher, BiometricLivenessChallenge::PURPOSE_CHECK_IN, $session->id),
+            ])
+            ->assertSessionHas('error', 'Konfigurasi endpoint verifikasi wajah tidak sesuai. Hubungi admin untuk memperbaikinya.');
 
         $this->assertDatabaseMissing('attendances', [
             'teacher_id' => $teacher->id,
@@ -442,6 +636,36 @@ class AttendanceStatusTest extends TestCase
             ->assertViewHas('activeSession', fn ($session) => $session && $session->is($afternoon));
     }
 
+    public function test_attendance_history_distinguishes_face_match_and_legacy_liveness(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 13:00:00', 'Asia/Jakarta'));
+
+        [$teacher, $user] = $this->createTeacherUser();
+        $session = $this->createSession();
+        $teacher->attendanceSessions()->attach($session->id);
+
+        Attendance::create([
+            'teacher_id' => $teacher->id,
+            'attendance_session_id' => $session->id,
+            'tanggal' => '2026-06-29',
+            'verification_method' => 'face_match_fastapi',
+            'status_kehadiran' => 'hadir',
+        ]);
+        Attendance::create([
+            'teacher_id' => $teacher->id,
+            'attendance_session_id' => $session->id,
+            'tanggal' => '2026-06-28',
+            'verification_method' => 'face_liveness_fastapi',
+            'status_kehadiran' => 'hadir',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('attendance.index'))
+            ->assertOk()
+            ->assertSee('Face match FastAPI')
+            ->assertSee('Liveness + biometrik');
+    }
+
     public function test_sync_marks_each_missed_required_session_as_alfa(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-30 18:30:00', 'Asia/Jakarta'));
@@ -501,34 +725,6 @@ class AttendanceStatusTest extends TestCase
         ]);
     }
 
-    private function validFaceImage(): string
-    {
-        // PNG 1x1 transparan yang valid agar lolos FaceVerificationService::verify().
-        $png = base64_decode(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-        );
-
-        return 'data:image/png;base64,'.base64_encode($png);
-    }
-
-    private function fakeMatchedFace(float $distance): void
-    {
-        config([
-            'services.face.url' => 'http://127.0.0.1:8001',
-            'services.face.api_key' => 'test-secret',
-        ]);
-
-        Http::fake([
-            '*' => Http::response([
-                'matched' => true,
-                'distance' => $distance,
-                'threshold' => 0.45,
-                'faces_detected' => 1,
-                'model_version' => TeacherFaceEnrollment::MODEL_VERSION,
-            ]),
-        ]);
-    }
-
     private function createSession(array $overrides = []): AttendanceSession
     {
         return AttendanceSession::create(array_merge([
@@ -547,7 +743,7 @@ class AttendanceStatusTest extends TestCase
     private function createTeacherUser(): array
     {
         $user = User::create([
-            'nip' => uniqid('nip_', true),
+            'username' => uniqid('user_', true),
             'name' => 'Guru Absensi Test',
             'email' => uniqid('attendance_', true).'@example.test',
             'password' => Hash::make('password'),

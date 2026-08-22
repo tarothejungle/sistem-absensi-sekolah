@@ -3,10 +3,6 @@
 @section('content')
 
 @php
-    $modeGantiInfal = $leave->infal_teacher_id
-        && $leave->status_pengajuan === 'disetujui'
-        && $leave->status_infal === 'ditolak';
-
     $isSementara = old('is_sementara', $leave->is_sementara ? '1' : '0') == '1';
     $jamMulaiValue = old('jam_mulai', $leave->jam_mulai ? substr($leave->jam_mulai, 0, 5) : '');
     $jamSelesaiValue = old('jam_selesai', $leave->jam_selesai ? substr($leave->jam_selesai, 0, 5) : '');
@@ -53,6 +49,7 @@
                             {{ $modeGantiInfal ? 'disabled' : '' }}
                         >
                         <label class="form-check-label" for="is_sementara">Izin sementara</label>
+                        <small class="text-muted d-block">Gunakan ketika Anda tetap akan hadir setelah kendala selesai. Guru pengganti tidak diperlukan.</small>
                     </div>
 
                     @error('is_sementara')
@@ -60,13 +57,13 @@
                     @enderror
 
                     <div class="row g-3">
-                        <div class="col-lg-3 col-md-6 ui-field">
+                        <div class="col-lg-3 col-md-6 ui-field {{ $isSementara ? 'd-none' : '' }}" data-leave-full-day-field>
                             <label class="form-label">Jenis</label>
                             <select
                                 name="jenis_pengajuan"
                                 class="form-select"
                                 required
-                                {{ $modeGantiInfal ? 'disabled' : '' }}
+                                {{ $isSementara || $modeGantiInfal ? 'disabled' : '' }}
                             >
                                 <option value="sakit" {{ old('jenis_pengajuan', $leave->jenis_pengajuan) == 'sakit' ? 'selected' : '' }}>Sakit</option>
                                 <option value="izin" {{ old('jenis_pengajuan', $leave->jenis_pengajuan) == 'izin' ? 'selected' : '' }}>Izin</option>
@@ -77,6 +74,11 @@
                             @error('jenis_pengajuan')
                                 <small class="text-danger d-block">{{ $message }}</small>
                             @enderror
+                        </div>
+
+                        <div class="col-lg-3 col-md-6 ui-field {{ $isSementara ? '' : 'd-none' }}" data-leave-temporary-field>
+                            <label class="form-label">Jenis</label>
+                            <input type="text" class="form-control" value="Izin Sementara" disabled>
                         </div>
 
                         <div class="col-lg-3 col-md-6 ui-field">
@@ -145,32 +147,49 @@
                     </div>
                 </div>
 
-                <div class="ui-form-section">
+                <div class="ui-form-section {{ $isSementara ? 'd-none' : '' }}" data-leave-infal-section>
                     <div class="ui-form-section-head">
                         <span class="ui-form-section-icon"><i class="bi bi-person-check"></i></span>
                         <div>
                             <h5 class="ui-form-section-title">Guru Pengganti</h5>
                             <p class="ui-form-section-subtitle">
-                                {{ $modeGantiInfal ? 'Guru pengganti sebelumnya menolak. Pilih pengganti baru atau kosongkan.' : 'Kosongkan jika pengajuan tidak membutuhkan guru pengganti.' }}
+                                {{ $modeGantiInfal ? 'Infal yang sudah menyetujui tetap dipertahankan. Ganti infal yang menolak.' : 'Pilih satu atau beberapa guru, atau kosongkan jika tidak perlu.' }}
                             </p>
                         </div>
                     </div>
 
-                    <div class="ui-field">
-                        <label class="form-label">Guru Pengganti / Guru Infal</label>
+                    @php
+                        $currentInfals = $leave->infalTeachers->keyBy('id');
+                        $defaultInfalIds = $modeGantiInfal
+                            ? $leave->infalTeachers->where('pivot.status_infal', 'disetujui')->pluck('id')->all()
+                            : $leave->infalTeachers->pluck('id')->all();
+                        $selectedInfalIds = array_map('intval', old('infal_teacher_ids', $defaultInfalIds));
+                    @endphp
+                    <div class="ui-field" data-infal-picker>
+                        <label class="form-label" for="infal-search">Guru Pengganti / Guru Infal</label>
+                        <input id="infal-search" type="search" class="form-control mb-2" placeholder="Cari nama guru" data-infal-search>
+                        <div class="border rounded p-2" style="max-height: 16rem; overflow-y: auto;">
+                            @forelse($teachers as $teacher)
+                                @php
+                                    $existing = $currentInfals->get($teacher->id);
+                                    $approved = $modeGantiInfal && $existing?->pivot->status_infal === 'disetujui';
+                                @endphp
+                                <label class="form-check py-1 mb-0" data-infal-option data-search-text="{{ Str::lower($teacher->nama_lengkap.' '.($teacher->mata_pelajaran ?? '')) }}">
+                                    <input class="form-check-input" type="checkbox" name="infal_teacher_ids[]" value="{{ $teacher->id }}" {{ in_array($teacher->id, $selectedInfalIds) ? 'checked' : '' }} {{ $approved ? 'disabled' : '' }}>
+                                    <span class="form-check-label">
+                                        {{ $teacher->nama_lengkap }}
+                                        @if($approved)<span class="badge bg-success">Sudah menyetujui</span>@endif
+                                    </span>
+                                </label>
+                            @empty
+                                <span class="text-muted">Belum ada guru aktif yang dapat dipilih.</span>
+                            @endforelse
+                        </div>
 
-                        <select name="infal_teacher_id" class="form-select">
-                            <option value="">Tidak menggunakan guru pengganti</option>
-
-                            @foreach($teachers as $teacher)
-                                <option value="{{ $teacher->id }}"
-                                    {{ old('infal_teacher_id', $leave->infal_teacher_id) == $teacher->id ? 'selected' : '' }}>
-                                    {{ $teacher->nama_lengkap }}
-                                </option>
-                            @endforeach
-                        </select>
-
-                        @error('infal_teacher_id')
+                        @error('infal_teacher_ids')
+                            <small class="text-danger d-block">{{ $message }}</small>
+                        @enderror
+                        @error('infal_teacher_ids.*')
                             <small class="text-danger d-block">{{ $message }}</small>
                         @enderror
                     </div>
@@ -181,7 +200,7 @@
                         <span class="ui-form-section-icon"><i class="bi bi-card-text"></i></span>
                         <div>
                             <h5 class="ui-form-section-title">Alasan dan Lampiran</h5>
-                            <p class="ui-form-section-subtitle">Perbarui alasan atau ganti lampiran jika diperlukan.</p>
+                            <p class="ui-form-section-subtitle">Perbarui alasan atau ganti bukti pendukung jika diperlukan.</p>
                         </div>
                     </div>
 
@@ -247,13 +266,24 @@
 @endsection
 
 @push('scripts')
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-infal-picker]').forEach(function (picker) {
+            const search = picker.querySelector('[data-infal-search]');
+            search.addEventListener('input', function () {
+                const keyword = search.value.toLocaleLowerCase().trim();
+                picker.querySelectorAll('[data-infal-option]').forEach(function (option) {
+                    option.classList.toggle('d-none', !option.dataset.searchText.includes(keyword));
+                });
+            });
+        });
+
         document.querySelectorAll('[data-leave-duration-form]').forEach(function (form) {
             const toggle = form.querySelector('[data-leave-temporary-toggle]');
             const startLabel = form.querySelector('[data-leave-start-label]');
             const endDateInput = form.querySelector('[data-leave-end-date]');
             const fullDayFields = form.querySelectorAll('[data-leave-full-day-field]');
+            const infalSections = form.querySelectorAll('[data-leave-infal-section]');
             const temporaryFields = form.querySelectorAll('[data-leave-temporary-field]');
             const temporaryInputs = form.querySelectorAll('[data-leave-temporary-input]');
             const isLocked = form.dataset.leaveDurationLocked === '1';
@@ -267,6 +297,19 @@
 
                 fullDayFields.forEach(function (field) {
                     field.classList.toggle('d-none', isTemporary);
+                    field.querySelectorAll('input, select, textarea').forEach(function (input) {
+                        input.disabled = isLocked || isTemporary;
+                    });
+                });
+
+                infalSections.forEach(function (section) {
+                    section.classList.toggle('d-none', isTemporary);
+                    section.querySelectorAll('input, select, textarea').forEach(function (input) {
+                        if (isTemporary && input.matches('input[name="infal_teacher_ids[]"]')) {
+                            input.checked = false;
+                        }
+                        input.disabled = isLocked || isTemporary;
+                    });
                 });
 
                 temporaryFields.forEach(function (field) {

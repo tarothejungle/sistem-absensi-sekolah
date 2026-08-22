@@ -17,17 +17,17 @@ class AttendanceReportExport implements FromView
 
     public function view(): View
     {
-        $query = Attendance::with(['teacher.user']);
+        $query = Attendance::with(['teacher.user', 'temporaryLeaveRequest']);
 
-        if (!empty($this->filters['start_date'])) {
+        if (! empty($this->filters['start_date'])) {
             $query->whereDate('tanggal', '>=', $this->filters['start_date']);
         }
 
-        if (!empty($this->filters['end_date'])) {
+        if (! empty($this->filters['end_date'])) {
             $query->whereDate('tanggal', '<=', $this->filters['end_date']);
         }
 
-        if (!empty($this->filters['status'])) {
+        if (! empty($this->filters['status'])) {
             $query->where('status_kehadiran', $this->filters['status']);
         }
 

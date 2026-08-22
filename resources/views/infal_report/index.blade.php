@@ -12,19 +12,18 @@
         flex-wrap: wrap;
     }
 
-    .infal-report-filter-button {
+    .infal-report-filter-button,
+    .infal-report-reset,
+    .infal-report-export-toggle {
         min-width: 120px;
-    }
-
-    .infal-report-reset {
-        width: 100%;
+        min-height: 48px;
     }
 
     @media (max-width: 768px) {
         .infal-report-actions {
             display: block !important;
             padding: 12px !important;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .infal-report-action-buttons {
@@ -91,15 +90,40 @@
                 <span>Filter</span>
             </button>
 
-            <a href="{{ route('infal.report.excel', request()->query()) }}" class="btn btn-success">
-                <i class="bi bi-file-earmark-excel-fill"></i>
-                <span>Excel</span>
+            <a href="{{ route('infal.report.index') }}" class="btn btn-danger infal-report-reset">
+                <span>Reset</span>
             </a>
- 
-            <a href="{{ route('infal.report.pdf', request()->query()) }}" class="btn btn-danger">
-                <i class="bi bi-file-earmark-pdf-fill"></i>
-                <span>PDF</span>
-            </a>
+
+            <div class="dropdown app-export-dropdown">
+                <button
+                    type="button"
+                    class="btn dropdown-toggle app-export-toggle infal-report-export-toggle"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                >
+                    <i class="bi bi-box-arrow-up"></i>
+                    <span>Export</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end app-export-menu">
+                    <li>
+                        <a
+                            href="{{ route('infal.report.pdf', request()->query()) }}"
+                            class="dropdown-item"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            <i class="bi bi-file-earmark-pdf-fill app-export-pdf-icon"></i>
+                            <span>Cetak PDF</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('infal.report.excel', request()->query()) }}" class="dropdown-item">
+                            <i class="bi bi-file-earmark-excel-fill app-export-excel-icon"></i>
+                            <span>Export Excel</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </div>
     </div>
 
@@ -108,7 +132,7 @@
         <div class="card-body">
             <form method="GET" id="infalReportFilterForm">
                 <div class="row g-3 align-items-end">
-                    <div class="col-md-5 ui-field">
+                    <div class="col-md-6 ui-field">
                         <label class="form-label fw-semibold">Tanggal Mulai</label>
                         <input
                             type="date"
@@ -118,7 +142,7 @@
                         >
                     </div>
 
-                    <div class="col-md-5 ui-field">
+                    <div class="col-md-6 ui-field">
                         <label class="form-label fw-semibold">Tanggal Selesai</label>
                         <input
                             type="date"
@@ -128,13 +152,6 @@
                         >
                     </div>
 
-                    <div class="col-md-2">
-                        <div class="ui-filter-actions">
-                            <a href="{{ route('infal.report.index') }}" class="btn btn-secondary infal-report-reset">
-                                Reset
-                            </a>
-                        </div>
-                    </div>
                 </div>
             </form>
         </div>
@@ -161,12 +178,12 @@
                         @forelse($items as $item)
                             <tr>
                                 <td>
-                                    {{ $item->tanggalLabel() }}
+                                    {{ $item->tanggal_label }}
                                 </td>
 
-                                <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
+                                <td>{{ $item->guru_utama ?? '-' }}</td>
 
-                                <td>{{ $item->infalTeacher->nama_lengkap ?? '-' }}</td>
+                                <td>{{ $item->guru_infal ?? '-' }}</td>
 
                                 <td>{{ ucfirst($item->jenis_pengajuan) }}</td>
 

@@ -1887,6 +1887,76 @@ body.sidebar-is-collapsed .brand-text {
     flex-wrap: wrap;
 }
 
+.bulk-action-form {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    margin: 0;
+}
+
+.bulk-action-form .btn,
+.ui-actions .bulk-action-form .btn,
+.ui-page-action-row .bulk-action-form .btn {
+    min-height: 40px;
+    margin: 0;
+}
+
+.app-export-dropdown {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.app-export-toggle {
+    min-width: 132px;
+    min-height: 48px;
+    padding: 9px 14px !important;
+    border-color: #7c879b !important;
+    border-radius: var(--ui-radius-sm, 8px) !important;
+    background: #7c879b !important;
+    color: #fff !important;
+    font-size: 14px;
+    justify-content: center;
+}
+
+.app-export-toggle::after {
+    margin-left: 8px;
+}
+
+.app-export-menu {
+    min-width: 220px;
+    margin-top: 8px !important;
+    padding: 8px !important;
+    border: 1px solid var(--ui-border, #dbe3ef) !important;
+    border-radius: var(--ui-radius-sm, 8px) !important;
+    background: var(--ref-surface, #fff) !important;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, .14) !important;
+}
+
+.app-export-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 9px 11px;
+    border-radius: 6px;
+    color: var(--ref-text, #0f172a) !important;
+    font-size: 14px;
+    font-weight: 750;
+}
+
+.app-export-menu .dropdown-item:hover,
+.app-export-menu .dropdown-item:focus {
+    background: var(--ref-surface-soft, #f8fafc) !important;
+}
+
+.app-export-pdf-icon {
+    color: var(--ui-rose, #dc3545);
+}
+
+.app-export-excel-icon {
+    color: var(--ui-emerald, #138a57);
+}
+
 .card,
 .ui-card,
 .card.border-0,
@@ -2728,6 +2798,21 @@ button:focus-visible,
     .report-action-buttons .btn-report-action {
         width: 100% !important;
         max-width: none !important;
+    }
+
+    .bulk-action-form,
+    .bulk-action-form .btn {
+        width: 100%;
+    }
+
+    .app-export-dropdown,
+    .app-export-toggle {
+        width: 100%;
+    }
+
+    .app-export-menu {
+        width: 100%;
+        min-width: 0;
     }
 
     .ui-actions .btn {
@@ -4829,5 +4914,127 @@ html[data-theme="dark"] .duty-switch {
 
     .mobile-bottom-link i {
         font-size: 19px !important;
+    }
+}
+
+/* =========================================================
+   DASHBOARD PROFILE INCOMPLETE ALERT - theme-aware
+   ========================================================= */
+.dashboard-profile-alert {
+    border-radius: var(--ref-radius) !important;
+    background: #fff7ed !important;
+    border: 1px solid #fed7aa !important;
+    color: #7c2d12 !important;
+    padding: 16px 20px !important;
+}
+
+.dashboard-profile-alert .fw-bold {
+    margin-bottom: 6px;
+}
+
+.dashboard-profile-alert .small {
+    line-height: 1.5;
+}
+
+.dashboard-profile-alert-icon {
+    color: #f59e0b !important;
+}
+
+html[data-theme="dark"] .dashboard-profile-alert {
+    background: rgba(251, 191, 36, .12) !important;
+    border-color: rgba(251, 191, 36, .32) !important;
+    color: #fde68a !important;
+}
+
+html[data-theme="dark"] .dashboard-profile-alert-icon {
+    color: #fbbf24 !important;
+}
+
+html[data-theme="dark"] .dashboard-profile-alert strong {
+    color: #fde68a !important;
+}
+
+html[data-theme="dark"] .dashboard-profile-alert .small {
+    color: #d6c78a !important;
+}
+
+/* =========================================================
+   PROFILE SESSION PANEL - session info card inside Data Diri
+   ========================================================= */
+.profile-session-panel {
+    padding: 14px;
+    border: 1px solid var(--ref-line);
+    border-radius: var(--ref-radius);
+    background: #f8fafc;
+    color: var(--ref-text);
+}
+
+.profile-session-panel .text-muted {
+    color: var(--ref-muted) !important;
+}
+
+.profile-session-panel .fw-semibold {
+    color: var(--ref-text) !important;
+}
+
+.profile-session-panel .text-success {
+    color: var(--ui-emerald, #10b981) !important;
+}
+
+html[data-theme="dark"] .profile-session-panel {
+    background: var(--ref-surface-soft) !important;
+    border-color: var(--ref-line) !important;
+    color: var(--ref-text) !important;
+}
+
+/* =========================================================
+   ATTENDANCE TIME PANEL - time info card on attendance page
+   ========================================================= */
+.attendance-time-panel {
+    padding: 14px;
+    border: 1px solid var(--ref-line);
+    border-radius: var(--ref-radius);
+    background: #f8fafc;
+    color: var(--ref-text);
+}
+
+.attendance-time-panel .text-muted {
+    color: var(--ref-muted) !important;
+}
+
+.attendance-time-panel .fw-semibold {
+    color: var(--ref-text) !important;
+}
+
+.attendance-time-panel .text-success {
+    color: var(--ui-emerald, #10b981) !important;
+}
+
+html[data-theme="dark"] .attendance-time-panel {
+    background: var(--ref-surface-soft) !important;
+    border-color: var(--ref-line) !important;
+    color: var(--ref-text) !important;
+}
+
+/* Keep payroll form action aligned with direct-link buttons. */
+.ui-page-action-row > .payroll-finalize-form {
+    display: inline-flex;
+    align-items: stretch;
+    margin: 0;
+}
+
+.ui-page-action-row > .payroll-finalize-form .btn {
+    height: 100%;
+}
+
+@media (max-width: 768px) {
+    .ui-page-action-row > .payroll-finalize-form,
+    .ui-page-action-row > .payroll-finalize-form .btn {
+        width: 100%;
+        max-width: none;
+    }
+
+    .ui-page-action-row > .payroll-finalize-form .btn {
+        justify-content: center;
     }
 }

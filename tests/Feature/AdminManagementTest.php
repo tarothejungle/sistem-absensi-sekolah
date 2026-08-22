@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Exports\TeacherAccountsExport;
 use App\Models\AttendanceSession;
 use App\Models\Teacher;
-use App\Models\TeacherFaceEnrollment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
@@ -149,7 +148,7 @@ class AdminManagementTest extends TestCase
         $session = $this->createSession('Sesi Bendahara Test');
 
         $response = $this->actingAs($admin)->post(route('admin.teachers.store'), [
-            'nip' => 'bendahara_'.uniqid(),
+            'username' => 'bendahara_'.uniqid(),
             'password' => 'Aman123!',
             'nama_lengkap' => 'Bendahara Baru Test',
             'role' => 'bendahara',
@@ -162,12 +161,13 @@ class AdminManagementTest extends TestCase
             'attendance_days' => ['senin', 'selasa'],
         ]);
 
-        $response->assertRedirect();
         $user = User::where('name', 'Bendahara Baru Test')->firstOrFail();
+        $response->assertRedirect(route('admin.work-schedules.index', ['teacher_id' => $user->teacher->id]));
         $this->assertSame('bendahara', $user->role);
         $this->assertSame('aktif', $user->status);
         $this->assertNotNull($user->teacher);
-        $this->assertTrue($user->teacher->attendanceSessions->contains($session));
+        $this->assertTrue($user->teacher->attendanceSessions->isEmpty());
+        $this->assertTrue($user->teacher->schedules()->doesntExist());
     }
 
     public function test_super_admin_can_create_tenaga_kependidikan_from_data_guru(): void
@@ -176,7 +176,7 @@ class AdminManagementTest extends TestCase
         $session = $this->createSession('Sesi Tendik Test');
 
         $response = $this->actingAs($admin)->post(route('admin.teachers.store'), [
-            'nip' => 'tendik_'.uniqid(),
+            'username' => 'tendik_'.uniqid(),
             'password' => 'Aman123!',
             'nama_lengkap' => 'Tenaga Kependidikan Baru Test',
             'role' => 'tenaga_kependidikan',
@@ -189,11 +189,12 @@ class AdminManagementTest extends TestCase
             'attendance_days' => ['senin', 'selasa'],
         ]);
 
-        $response->assertRedirect();
         $user = User::where('name', 'Tenaga Kependidikan Baru Test')->firstOrFail();
+        $response->assertRedirect(route('admin.work-schedules.index', ['teacher_id' => $user->teacher->id]));
         $this->assertSame('tenaga_kependidikan', $user->role);
         $this->assertSame('Tenaga Kependidikan', $user->teacher->jabatan);
-        $this->assertTrue($user->teacher->attendanceSessions->contains($session));
+        $this->assertTrue($user->teacher->attendanceSessions->isEmpty());
+        $this->assertTrue($user->teacher->schedules()->doesntExist());
     }
 
     public function test_admin_and_teacher_creation_reject_weak_passwords(): void
@@ -203,7 +204,7 @@ class AdminManagementTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
-                'nip' => 'admin_weak_'.uniqid(),
+                'username' => 'admin_weak_'.uniqid(),
                 'name' => 'Admin Password Lemah',
                 'email' => uniqid('admin_weak_', true).'@example.test',
                 'password' => 'password',
@@ -212,7 +213,7 @@ class AdminManagementTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('admin.teachers.store'), [
-                'nip' => 'teacher_weak_'.uniqid(),
+                'username' => 'teacher_weak_'.uniqid(),
                 'password' => 'password',
                 'nama_lengkap' => 'Guru Password Lemah',
                 'role' => 'guru',
@@ -223,28 +224,6 @@ class AdminManagementTest extends TestCase
                 'attendance_days' => ['senin'],
             ])
             ->assertSessionHasErrors('password');
-    }
-
-    public function test_super_admin_can_reset_teacher_face_enrollment(): void
-    {
-        $admin = $this->createUser('super_admin', 'Admin Enrollment Wajah Test');
-        [$teacher] = $this->createTeacherUser('guru', 'Guru Enrollment Wajah Test');
-        TeacherFaceEnrollment::create([
-            'teacher_id' => $teacher->id,
-            'face_descriptor' => array_fill(0, TeacherFaceEnrollment::EMBEDDING_DIMENSIONS, 0.02),
-            'model_version' => TeacherFaceEnrollment::MODEL_VERSION,
-            'recapture_count' => 3,
-            'enrolled_by' => $admin->id,
-            'enrolled_at' => now(),
-        ]);
-
-        $this->actingAs($admin)
-            ->delete(route('admin.teachers.face-enrollment.delete', $teacher))
-            ->assertRedirect(route('admin.teachers.edit', $teacher));
-
-        $this->assertDatabaseMissing('teacher_face_enrollments', [
-            'teacher_id' => $teacher->id,
-        ]);
     }
 
     private function createSession(string $name): AttendanceSession
@@ -278,7 +257,7 @@ class AdminManagementTest extends TestCase
     private function createUser(string $role, string $name = 'User Admin Test'): User
     {
         $user = User::create([
-            'nip' => uniqid('nip_', true),
+            'username' => uniqid('user_', true),
             'name' => $name.' '.uniqid(),
             'email' => uniqid('admin_', true).'@example.test',
             'password' => Hash::make('password'),

@@ -107,6 +107,7 @@
                             <th>Total Guru</th>
                             <th>Total Gaji Bersih</th>
                             <th>Dibuat Oleh</th>
+                            <th>Status</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
@@ -119,6 +120,11 @@
                                 <td>Rp {{ number_format($period->items()->sum('gaji_bersih'), 0, ',', '.') }}</td>
                                 <td>{{ $period->generator->name ?? '-' }}</td>
                                 <td>
+                                    <span class="badge {{ $period->status === 'final' ? 'bg-success' : 'bg-warning text-dark' }}">
+                                        {{ $period->status === 'final' ? 'Final' : 'Draft' }}
+                                    </span>
+                                </td>
+                                <td>
                                     <div class="d-flex gap-1 flex-wrap">
                                         <a href="{{ route('payroll.show', $period) }}" class="btn btn-primary btn-sm">Detail</a>
                                         <a href="{{ route('payroll.print', $period) }}" class="btn btn-danger btn-sm" target="_blank">Cetak PDF</a>
@@ -127,7 +133,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6">
+                                <td colspan="7">
                                     <div class="ui-empty-state">
                                         <i class="bi bi-cash-stack"></i>
                                         <div class="fw-bold">Belum ada periode penggajian.</div>

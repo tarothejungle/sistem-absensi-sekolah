@@ -31,7 +31,10 @@ return [
     |
     */
 
-    'lifetime' => env('SESSION_LIFETIME', 5),
+    'lifetime' => env('SESSION_LIFETIME', 15),
+
+    // Batas aktivitas aplikasi sebelum autentikasi pengguna diakhiri.
+    'idle_timeout' => env('SESSION_IDLE_TIMEOUT', 10),
 
     'expire_on_close' => false,
 

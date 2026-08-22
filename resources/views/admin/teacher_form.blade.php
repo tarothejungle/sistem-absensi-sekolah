@@ -3,34 +3,12 @@
 @section('content')
 @php
     $teacher = $teacher ?? null;
-    $dayLabels = [
-        'senin' => 'Senin',
-        'selasa' => 'Selasa',
-        'rabu' => 'Rabu',
-        'kamis' => 'Kamis',
-        'jumat' => 'Jumat',
-        'sabtu' => 'Sabtu',
-        'minggu' => 'Minggu',
-    ];
-
-    $selectedDays = old('attendance_days');
-
-    if (!$selectedDays) {
-        if ($teacher && $teacher->schedules && $teacher->schedules->count() > 0) {
-            $selectedDays = $teacher->schedules
-                ->where('status', 'aktif')
-                ->pluck('hari')
-                ->toArray();
-        } else {
-            $selectedDays = ['senin', 'selasa', 'rabu', 'kamis', 'jumat'];
-        }
-    }
 @endphp
 
 <div class="container-fluid">
     <div class="ui-page-hero">
         <h3>{{ $teacher ? 'Edit Guru' : 'Tambah Guru' }}</h3>
-        <p>Atur akun, role, identitas, sesi absensi, dan hari absensi pengguna sekolah.</p>
+        <p>Atur akun, role, dan identitas pengguna sekolah. Jadwal diatur melalui menu Setting Jadwal Kerja.</p>
     </div>
 
     @if ($errors->any())
@@ -62,7 +40,7 @@
             <div class="row g-3">
                 <div class="col-md-6 ui-field">
                     <label class="form-label">Username</label>
-                    <input type="text" name="nip" class="form-control" value="{{ old('nip', $teacher?->user?->nip) }}" placeholder="Masukkan username" required>
+                    <input type="text" name="username" class="form-control" value="{{ old('username', $teacher?->user?->username) }}" placeholder="Masukkan username" required>
                 </div>
 
                 @if(!$teacher)
@@ -132,48 +110,6 @@
             </div>
             </div>
 
-            <hr class="my-4">
-
-            <div class="ui-section-title">
-                <i class="bi bi-clock-history"></i>
-                <span>Sesi Absensi</span>
-            </div>
-
-            <div class="row g-3 mb-4">
-                @foreach($sessions as $session)
-                    <div class="col-md-6">
-                        <label class="ui-option-card d-block h-100" style="cursor:pointer;">
-                            <div class="d-flex align-items-start gap-2">
-                                <input type="checkbox" name="attendance_session_ids[]" value="{{ $session->id }}" class="form-check-input mt-1"
-                                    @if(in_array($session->id, old('attendance_session_ids', $teacher ? $teacher->attendanceSessions->pluck('id')->toArray() : []))) checked @endif>
-                                <div>
-                                    <div class="fw-bold">{{ $session->nama_sesi }}</div>
-                                    <small class="text-muted">
-                                        {{ substr($session->jam_masuk, 0, 5) }} - {{ substr($session->jam_pulang, 0, 5) }}
-                                    </small>
-                                </div>
-                            </div>
-                        </label>
-                    </div>
-                @endforeach
-            </div>
-
-            <div class="ui-section-title">
-                <i class="bi bi-calendar-week"></i>
-                <span>Hari Absensi</span>
-            </div>
-
-            <div class="row g-2 mb-4">
-                @foreach($dayLabels as $value => $label)
-                    <div class="col-6 col-md-3 col-lg">
-                        <label class="ui-option-card d-flex align-items-center gap-2 justify-content-center" style="cursor:pointer;">
-                            <input type="checkbox" name="attendance_days[]" value="{{ $value }}" class="form-check-input" {{ in_array($value, $selectedDays) ? 'checked' : '' }}>
-                            <span class="fw-bold">{{ $label }}</span>
-                        </label>
-                    </div>
-                @endforeach
-            </div>
-
             <div class="ui-form-actions">
                 <a href="{{ route('admin.teachers', request()->query()) }}" class="btn btn-secondary px-4">
                     <i class="bi bi-arrow-left"></i> Kembali
@@ -194,14 +130,13 @@
                     <span>Data Wajah Absensi</span>
                 </div>
 
-                <p class="text-muted mb-3">Pendaftaran dan recapture dilakukan oleh pemilik akun melalui menu profil. Super admin hanya dapat mereset data wajah.</p>
+                <p class="text-muted mb-3">Pemilik akun wajib menyelesaikan active liveness empat langkah sebelum template dibuat. Setelah tersimpan, super admin menjadi satu-satunya role yang dapat mereset data wajah.</p>
 
                 @if($teacher->faceEnrollment?->isCompatible())
                     <div class="alert alert-success d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <span>
                             <i class="bi bi-check-circle me-1"></i>
-                            Wajah terdaftar pada {{ $teacher->faceEnrollment->enrolled_at?->format('d/m/Y H:i') }}.
-                            Recapture terpakai {{ $teacher->faceEnrollment->recapture_count }}/{{ \App\Models\TeacherFaceEnrollment::MAX_RECAPTURES }}.
+                            Template InsightFace sudah terdaftar dan dikunci sejak {{ $teacher->faceEnrollment->enrolled_at?->format('d/m/Y H:i') }}.
                         </span>
                         <form method="POST" action="{{ route('admin.teachers.face-enrollment.delete', array_merge(['teacher' => $teacher], request()->query())) }}" onsubmit="return confirm('Hapus data wajah terdaftar? Guru/karyawan tidak dapat absensi sampai didaftarkan lagi.');">
                             @csrf
@@ -219,7 +154,7 @@
                         </form>
                     </div>
                 @else
-                    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i> Wajah belum terdaftar. Akun ini belum bisa melakukan absensi wajah.</div>
+                    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i> Template InsightFace belum terdaftar. Akun ini belum bisa melakukan absensi biometrik.</div>
                 @endif
 
             </div>
@@ -229,7 +164,7 @@
 @endsection
 
 @push('scripts')
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     document.querySelectorAll('[data-strong-password]').forEach(function (input) {
         input.addEventListener('input', function () {
             const valid = input.value.length >= 8

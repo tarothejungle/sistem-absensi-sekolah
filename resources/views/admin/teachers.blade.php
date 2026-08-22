@@ -86,68 +86,87 @@
     .teacher-search-form {
         display: flex;
         gap: 8px;
+        align-items: center;
+        align-self: center;
+        margin: 0;
     }
 
     .teacher-search-form .form-control {
         flex: 1 1 auto;
-        min-height: 40px !important;
-        padding: 6px 12px !important;
-        border-radius: 6px !important;
-        font-size: 12px;
+        min-height: 48px !important;
+        padding: 10px 14px !important;
+        border-radius: var(--ui-radius-sm, 8px) !important;
+        font-size: 14px;
     }
 
     .teacher-search-reset {
-        flex: 0 0 40px;
-        width: 40px;
+        flex: 0 0 48px;
+        width: 48px;
+        min-height: 48px !important;
         padding-left: 0 !important;
         padding-right: 0 !important;
         justify-content: center;
     }
 
-    .teacher-export-btn {
-        min-width: 92px;
-        min-height: 34px;
-        padding: 6px 10px !important;
-        border-radius: 6px !important;
-        font-size: 12px;
+    .teacher-actions .btn-add-primary,
+    .teacher-actions .bulk-action-form .btn,
+    .teacher-actions .app-export-toggle {
+        min-height: 48px;
+        padding: 9px 14px !important;
+        border-radius: var(--ui-radius-sm, 8px) !important;
+        font-size: 14px;
+        justify-content: center;
     }
 
     @media (min-width: 769px) {
         .teacher-toolbar {
             display: grid !important;
-            grid-template-columns: minmax(180px, 1fr) minmax(0, 1fr);
+            grid-template-columns: minmax(280px, 1fr) auto;
             align-items: center !important;
-            gap: 12px;
+            gap: 20px;
             padding: 20px 28px !important;
         }
 
         .teacher-search-form {
-            width: 50%;
-            max-width: none;
+            width: min(100%, 350px);
+            max-width: 350px;
         }
 
         .teacher-actions {
             display: flex;
             justify-content: flex-end;
             align-items: center;
-            gap: 10px;
+            align-self: center;
+            gap: 12px;
             width: 100%;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
         }
 
         .teacher-actions .btn-add-primary,
         .teacher-actions .bulk-action-form,
-        .teacher-actions .bulk-action-form .btn {
+        .teacher-actions .bulk-action-form .btn,
+        .teacher-actions .app-export-dropdown {
             flex: 0 0 auto;
         }
 
         .teacher-actions .btn-add-primary,
-        .teacher-actions .bulk-action-form .btn,
-        .teacher-actions .teacher-export-btn {
-            min-height: 40px;
-            padding: 6px 10px !important;
-            border-radius: 6px !important;
-            font-size: 12px;
+        .teacher-actions .bulk-action-form .btn {
+            min-width: 150px;
+        }
+    }
+
+    @media (min-width: 769px) and (max-width: 1100px) {
+        .teacher-toolbar {
+            grid-template-columns: 1fr;
+        }
+
+        .teacher-search-form {
+            width: 100%;
+            max-width: none;
+        }
+
+        .teacher-actions {
+            justify-content: flex-start;
         }
     }
 
@@ -169,7 +188,8 @@
         .teacher-actions .btn-add-primary,
         .teacher-actions .bulk-action-form,
         .teacher-actions .bulk-action-form .btn,
-        .teacher-actions .teacher-export-btn {
+        .teacher-actions .app-export-dropdown,
+        .teacher-actions .app-export-toggle {
             width: 100%;
         }
 
@@ -226,27 +246,48 @@
                 data-confirm-action="true"
                 data-confirm-type="danger"
                 data-confirm-icon="bi-person-x"
-                data-confirm-title="Hapus guru terpilih?"
-                data-confirm-message="Semua data guru yang dicentang beserta akun terkait akan dihapus dari sistem."
-                data-confirm-submit="Hapus Terpilih"
+                data-confirm-title="Nonaktifkan guru terpilih?"
+                data-confirm-message="Akun yang sudah memiliki riwayat operasional akan dinonaktifkan agar data lama tetap utuh. Akun tanpa riwayat akan dihapus permanen."
+                data-confirm-submit="Proses Terpilih"
             >
                 @csrf
                 @method('DELETE')
                 <button type="submit" class="btn btn-danger" data-bulk-delete-button form="teacherBulkDeleteForm" disabled>
                     <i class="bi bi-trash3"></i>
-                    <span>Hapus Terpilih</span>
+                    <span>Nonaktifkan / Hapus</span>
                 </button>
             </form>
 
-            <a href="{{ route('admin.teachers.export.excel', request()->query()) }}" class="btn btn-success teacher-export-btn" aria-label="Excel">
-                <i class="bi bi-file-earmark-excel-fill"></i>
-                <span>Excel</span>
-            </a>
-
-            <a href="{{ route('admin.teachers.export.pdf', request()->query()) }}" class="btn btn-danger teacher-export-btn" target="_blank" aria-label="PDF">
-                <i class="bi bi-file-earmark-pdf-fill"></i>
-                <span>PDF</span>
-            </a>
+            <div class="dropdown app-export-dropdown">
+                <button
+                    type="button"
+                    class="btn dropdown-toggle app-export-toggle"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                >
+                    <i class="bi bi-box-arrow-up"></i>
+                    <span>Export</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end app-export-menu">
+                    <li>
+                        <a
+                            href="{{ route('admin.teachers.export.pdf', request()->query()) }}"
+                            class="dropdown-item"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            <i class="bi bi-file-earmark-pdf-fill app-export-pdf-icon"></i>
+                            <span>Cetak PDF</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('admin.teachers.export.excel', request()->query()) }}" class="dropdown-item">
+                            <i class="bi bi-file-earmark-excel-fill app-export-excel-icon"></i>
+                            <span>Export Excel</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </div>
     </div>
 
@@ -277,7 +318,7 @@
                                     <td>
                                         <input type="checkbox" name="teacher_ids[]" value="{{ $teacher->id }}" class="form-check-input" data-row-check>
                                     </td>
-                                    <td>{{ $teacher->user->nip ?? '-' }}</td>
+                                    <td>{{ $teacher->user->username ?? '-' }}</td>
                                     <td class="fw-semibold">{{ $teacher->nama_lengkap ?? '-' }}</td>
                                     <td>
                                         <span class="badge bg-info text-dark">
@@ -323,13 +364,13 @@
                                                 data-confirm-action="true"
                                                 data-confirm-type="danger"
                                                 data-confirm-icon="bi-person-x"
-                                                data-confirm-title="Hapus data guru?"
-                                                data-confirm-message="Data guru {{ $teacher->nama_lengkap ?? 'ini' }} beserta akun terkait akan dihapus dari sistem."
-                                                data-confirm-submit="Hapus Guru"
+                                                data-confirm-title="Nonaktifkan data guru?"
+                                                data-confirm-message="Jika {{ $teacher->nama_lengkap ?? 'guru ini' }} sudah memiliki riwayat operasional, akun akan dinonaktifkan. Akun tanpa riwayat akan dihapus permanen."
+                                                data-confirm-submit="Proses Guru"
                                             >
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit" class="btn btn-danger btn-sm">Hapus</button>
+                                                <button type="submit" class="btn btn-danger btn-sm">Nonaktifkan</button>
                                             </form>
                                         </div>
                                     </td>
@@ -359,7 +400,7 @@
 @endsection
 
 @push('scripts')
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.querySelector('[data-live-search-form]');
         const input = document.querySelector('[data-live-search-input]');

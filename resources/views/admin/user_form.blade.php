@@ -44,9 +44,9 @@
                             <label class="form-label">Username</label>
                             <input
                                 type="text"
-                                name="nip"
+                                name="username"
                                 class="form-control"
-                                value="{{ old('nip', $user->nip ?? '') }}"
+                                value="{{ old('username', $user->username ?? '') }}"
                                 placeholder="Masukkan username"
                                 required
                             >
@@ -122,7 +122,7 @@
 @endsection
 
 @push('scripts')
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     document.querySelectorAll('[data-strong-password]').forEach(function (input) {
         input.addEventListener('input', function () {
             const valid = input.value.length >= 8

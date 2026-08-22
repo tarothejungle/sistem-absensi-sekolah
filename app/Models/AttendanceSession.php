@@ -19,12 +19,12 @@ class AttendanceSession extends Model
     ];
 
     public function teachers()
-{
-    return $this->belongsToMany(
-        \App\Models\Teacher::class,
-        'attendance_session_teacher',
-        'attendance_session_id',
-        'teacher_id'
-    );
-}
+    {
+        return $this->belongsToMany(
+            \App\Models\Teacher::class,
+            'attendance_session_teacher',
+            'attendance_session_id',
+            'teacher_id'
+        )->withPivot('is_primary')->withTimestamps();
+    }
 }

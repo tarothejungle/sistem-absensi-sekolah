@@ -60,7 +60,7 @@ class PasswordResetController extends Controller
         $request->validate([
             'token' => 'required',
             'email' => 'required|email',
-            'password' => 'required|min:8|confirmed',
+            'password' => ['required', 'confirmed', \App\Support\PasswordPolicy::rule()],
         ], [
             'email.required' => 'Email wajib diisi.',
             'password.required' => 'Password baru wajib diisi.',

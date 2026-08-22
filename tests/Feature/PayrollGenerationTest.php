@@ -27,15 +27,16 @@ class PayrollGenerationTest extends TestCase
 
         $leave = LeaveRequest::create([
             'teacher_id' => $mainTeacher->id,
-            'infal_teacher_id' => $infalTeacher->id,
             'jenis_pengajuan' => 'izin',
             'tanggal_mulai' => '2099-05-10',
             'tanggal_selesai' => '2099-05-10',
             'alasan' => 'Keperluan keluarga.',
             'status_pengajuan' => 'disetujui',
-            'status_infal' => 'disetujui',
             'approved_by' => $payrollUser->id,
             'approved_at' => now(),
+        ]);
+        $leave->infalTeachers()->sync([
+            $infalTeacher->id => ['status_infal' => 'disetujui'],
         ]);
 
         $response = $this
@@ -54,13 +55,13 @@ class PayrollGenerationTest extends TestCase
 
         $this->assertSame($payrollUser->id, $period->generated_by);
         $this->assertEquals(1500000, (float) $mainItem->gaji_pokok);
-        $this->assertEquals(30000, (float) $mainItem->potongan_absen);
-        $this->assertEquals(1470000, (float) $mainItem->gaji_bersih);
+        $this->assertEquals(20000, (float) $mainItem->potongan_absen);
+        $this->assertEquals(1480000, (float) $mainItem->gaji_bersih);
         $this->assertSame(1, $mainItem->jumlah_absen_diganti);
 
         $this->assertEquals(800000, (float) $infalItem->gaji_pokok);
-        $this->assertEquals(30000, (float) $infalItem->tambahan_infal);
-        $this->assertEquals(830000, (float) $infalItem->gaji_bersih);
+        $this->assertEquals(20000, (float) $infalItem->tambahan_infal);
+        $this->assertEquals(820000, (float) $infalItem->gaji_bersih);
         $this->assertSame(1, $infalItem->jumlah_mengganti);
 
         $mainDetail = $mainItem->details()->where('tipe', 'potongan_absen')->firstOrFail();
@@ -68,10 +69,154 @@ class PayrollGenerationTest extends TestCase
 
         $this->assertSame($leave->id, $mainDetail->leave_request_id);
         $this->assertSame('2099-05-10', $mainDetail->tanggal_event->toDateString());
-        $this->assertEquals(30000, (float) $mainDetail->nominal);
+        $this->assertEquals(20000, (float) $mainDetail->nominal);
         $this->assertSame($leave->id, $infalDetail->leave_request_id);
-        $this->assertEquals(30000, (float) $infalDetail->nominal);
-        $this->assertEquals(30000, (float) $mainTeacher->salary()->firstOrFail()->potongan_per_absen);
+        $this->assertEquals(20000, (float) $infalDetail->nominal);
+        $this->assertEquals(20000, (float) $mainTeacher->salary()->firstOrFail()->potongan_per_absen);
+    }
+
+    public function test_generate_payroll_splits_deduction_evenly_between_two_infal(): void
+    {
+        $payrollUser = $this->createUser('bendahara');
+        [$mainTeacher] = $this->createTeacherUser('guru', 'Guru Utama Split');
+        [$infalB] = $this->createTeacherUser('guru', 'Guru Infal B');
+        [$infalC] = $this->createTeacherUser('guru', 'Guru Infal C');
+
+        // Gaji > 1jt → potongan 30.000, dibagi 2 → tiap infal 15.000.
+        $this->createSalary($mainTeacher, 1500000, 30000);
+        $this->createSalary($infalB, 800000, 20000);
+        $this->createSalary($infalC, 800000, 20000);
+
+        $leave = LeaveRequest::create([
+            'teacher_id' => $mainTeacher->id,
+            'jenis_pengajuan' => 'izin',
+            'tanggal_mulai' => '2099-05-10',
+            'tanggal_selesai' => '2099-05-10',
+            'alasan' => 'Keperluan keluarga.',
+            'status_pengajuan' => 'disetujui',
+            'approved_by' => $payrollUser->id,
+            'approved_at' => now(),
+        ]);
+        $leave->infalTeachers()->sync([
+            $infalB->id => ['status_infal' => 'disetujui'],
+            $infalC->id => ['status_infal' => 'disetujui'],
+        ]);
+
+        $this->actingAs($payrollUser)
+            ->post(route('payroll.generate'), ['tahun' => 2099, 'bulan' => 5])
+            ->assertRedirect(route('payroll.index'));
+
+        $period = PayrollPeriod::where('tahun', 2099)->where('bulan', 5)->firstOrFail();
+        $mainItem = $this->payrollItem($period, $mainTeacher);
+        $itemB = $this->payrollItem($period, $infalB);
+        $itemC = $this->payrollItem($period, $infalC);
+
+        // Guru utama dipotong penuh, tidak dibagi.
+        $this->assertEquals(30000, (float) $mainItem->potongan_absen);
+        $this->assertSame(1, $mainItem->jumlah_absen_diganti);
+
+        // Tiap infal menerima setengah.
+        $this->assertEquals(15000, (float) $itemB->tambahan_infal);
+        $this->assertEquals(15000, (float) $itemC->tambahan_infal);
+        $this->assertSame(1, $itemB->jumlah_mengganti);
+        $this->assertSame(1, $itemC->jumlah_mengganti);
+
+        // Total tambahan == total potongan.
+        $this->assertEquals(
+            (float) $mainItem->potongan_absen,
+            (float) $itemB->tambahan_infal + (float) $itemC->tambahan_infal
+        );
+    }
+
+    public function test_generate_payroll_splits_deduction_as_raw_decimal_among_three_infal(): void
+    {
+        $payrollUser = $this->createUser('bendahara');
+        [$mainTeacher] = $this->createTeacherUser('guru', 'Guru Utama Ganjil');
+        [$infalA] = $this->createTeacherUser('guru', 'Guru Infal A3');
+        [$infalB] = $this->createTeacherUser('guru', 'Guru Infal B3');
+        [$infalC] = $this->createTeacherUser('guru', 'Guru Infal C3');
+
+        // Gaji < 1jt → potongan 20.000, dibagi 3 → 6.666,67 tiap infal (desimal apa adanya).
+        $this->createSalary($mainTeacher, 900000, 20000);
+        $this->createSalary($infalA, 800000, 20000);
+        $this->createSalary($infalB, 800000, 20000);
+        $this->createSalary($infalC, 800000, 20000);
+
+        $leave = LeaveRequest::create([
+            'teacher_id' => $mainTeacher->id,
+            'jenis_pengajuan' => 'izin',
+            'tanggal_mulai' => '2099-05-10',
+            'tanggal_selesai' => '2099-05-10',
+            'alasan' => 'Keperluan keluarga.',
+            'status_pengajuan' => 'disetujui',
+            'approved_by' => $payrollUser->id,
+            'approved_at' => now(),
+        ]);
+        $leave->infalTeachers()->sync([
+            $infalA->id => ['status_infal' => 'disetujui'],
+            $infalB->id => ['status_infal' => 'disetujui'],
+            $infalC->id => ['status_infal' => 'disetujui'],
+        ]);
+
+        $this->actingAs($payrollUser)
+            ->post(route('payroll.generate'), ['tahun' => 2099, 'bulan' => 5])
+            ->assertRedirect(route('payroll.index'));
+
+        $period = PayrollPeriod::where('tahun', 2099)->where('bulan', 5)->firstOrFail();
+        $mainItem = $this->payrollItem($period, $mainTeacher);
+
+        $this->assertEquals(20000, (float) $mainItem->potongan_absen);
+
+        $shares = [];
+        foreach ([$infalA, $infalB, $infalC] as $infal) {
+            $item = $this->payrollItem($period, $infal);
+            // 20000 / 3 = 6666.666... disimpan ke decimal(15,2) → 6666.67.
+            $shares[] = (float) $item->tambahan_infal;
+        }
+        $this->assertSame([6666.67, 6666.67, 6666.66], $shares);
+        $this->assertEquals(20000, array_sum($shares));
+    }
+
+    public function test_generate_payroll_splits_only_among_approved_infal(): void
+    {
+        $payrollUser = $this->createUser('bendahara');
+        [$mainTeacher] = $this->createTeacherUser('guru', 'Guru Utama Partial');
+        [$infalB] = $this->createTeacherUser('guru', 'Guru Infal Setuju');
+        [$infalC] = $this->createTeacherUser('guru', 'Guru Infal Tolak');
+
+        $this->createSalary($mainTeacher, 1500000, 30000);
+        $this->createSalary($infalB, 800000, 20000);
+        $this->createSalary($infalC, 800000, 20000);
+
+        $leave = LeaveRequest::create([
+            'teacher_id' => $mainTeacher->id,
+            'jenis_pengajuan' => 'izin',
+            'tanggal_mulai' => '2099-05-10',
+            'tanggal_selesai' => '2099-05-10',
+            'alasan' => 'Keperluan keluarga.',
+            'status_pengajuan' => 'disetujui',
+            'approved_by' => $payrollUser->id,
+            'approved_at' => now(),
+        ]);
+        // C menolak → hanya B yang menerima, penuh 30.000.
+        $leave->infalTeachers()->sync([
+            $infalB->id => ['status_infal' => 'disetujui'],
+            $infalC->id => ['status_infal' => 'ditolak'],
+        ]);
+
+        $this->actingAs($payrollUser)
+            ->post(route('payroll.generate'), ['tahun' => 2099, 'bulan' => 5])
+            ->assertRedirect(route('payroll.index'));
+
+        $period = PayrollPeriod::where('tahun', 2099)->where('bulan', 5)->firstOrFail();
+        $mainItem = $this->payrollItem($period, $mainTeacher);
+        $itemB = $this->payrollItem($period, $infalB);
+        $itemC = $this->payrollItem($period, $infalC);
+
+        $this->assertEquals(30000, (float) $mainItem->potongan_absen);
+        $this->assertEquals(30000, (float) $itemB->tambahan_infal);
+        $this->assertEquals(0, (float) $itemC->tambahan_infal);
+        $this->assertSame(0, $itemC->jumlah_mengganti);
     }
 
     public function test_generate_payroll_ignores_tugas_luar_and_super_admin_teacher_records(): void
@@ -87,15 +232,15 @@ class PayrollGenerationTest extends TestCase
 
         LeaveRequest::create([
             'teacher_id' => $mainTeacher->id,
-            'infal_teacher_id' => $infalTeacher->id,
             'jenis_pengajuan' => 'tugas_luar',
             'tanggal_mulai' => '2099-06-12',
             'tanggal_selesai' => '2099-06-12',
             'alasan' => 'Rapat dinas.',
             'status_pengajuan' => 'disetujui',
-            'status_infal' => 'disetujui',
             'approved_by' => $payrollUser->id,
             'approved_at' => now(),
+        ])->infalTeachers()->sync([
+            $infalTeacher->id => ['status_infal' => 'disetujui'],
         ]);
 
         $response = $this
@@ -167,7 +312,7 @@ class PayrollGenerationTest extends TestCase
     private function createUser(string $role, string $name = 'User Payroll Test'): User
     {
         $user = User::create([
-            'nip' => uniqid('nip_', true),
+            'username' => uniqid('user_', true),
             'name' => $name . ' ' . uniqid(),
             'email' => uniqid('payroll_', true) . '@example.test',
             'password' => Hash::make('password'),

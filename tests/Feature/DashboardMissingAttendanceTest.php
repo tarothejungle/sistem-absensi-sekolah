@@ -66,6 +66,55 @@ class DashboardMissingAttendanceTest extends TestCase
         $this->assertSame('alfa', $missingAttendance->status_kehadiran);
     }
 
+    public function test_only_roles_with_attendance_access_are_required_to_attend(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2037-08-10 08:30:00', 'Asia/Jakarta'));
+
+        $session = $this->createSession();
+        $teachersByRole = collect();
+
+        foreach (array_merge(User::ATTENDANCE_ROLES, ['super_admin']) as $role) {
+            [$teacher] = $this->createTeacherUser($role, 'Kewajiban Absen ' . $role);
+            $teacher->attendanceSessions()->attach($session->id);
+            $teachersByRole->put($role, $teacher);
+        }
+
+        $superAdminTeacher = $teachersByRole->get('super_admin');
+        Attendance::create([
+            'teacher_id' => $superAdminTeacher->id,
+            'attendance_session_id' => $session->id,
+            'tanggal' => '2037-08-10',
+            'status_kehadiran' => 'alfa',
+            'verification_method' => 'face',
+            'device_info' => 'system-auto-status',
+        ]);
+
+        $viewer = $this->createUser('super_admin', 'Viewer Kewajiban Absen');
+        $response = $this->actingAs($viewer)->get(route('dashboard'));
+
+        $response->assertOk();
+
+        $missingTeachers = $response->viewData('guruBelumAbsenHariIni');
+
+        foreach (User::ATTENDANCE_ROLES as $role) {
+            $teacher = $teachersByRole->get($role);
+
+            $this->assertTrue($missingTeachers->contains('id', $teacher->id));
+            $this->assertDatabaseHas('attendances', [
+                'teacher_id' => $teacher->id,
+                'tanggal' => '2037-08-10',
+                'status_kehadiran' => 'alfa',
+            ]);
+        }
+
+        $this->assertFalse($missingTeachers->contains('id', $superAdminTeacher->id));
+        $this->assertDatabaseMissing('attendances', [
+            'teacher_id' => $superAdminTeacher->id,
+            'tanggal' => '2037-08-10',
+            'device_info' => 'system-auto-status',
+        ]);
+    }
+
     private function createAttendance(Teacher $teacher, AttendanceSession $session, array $overrides): Attendance
     {
         return Attendance::create(array_merge([
@@ -108,7 +157,7 @@ class DashboardMissingAttendanceTest extends TestCase
     private function createUser(string $role, string $name = 'User Dashboard Belum Absen Test'): User
     {
         $user = User::create([
-            'nip' => uniqid('nip_', true),
+            'username' => uniqid('user_', true),
             'name' => $name . ' ' . uniqid(),
             'email' => uniqid('dashboard_', true) . '@example.test',
             'password' => Hash::make('password'),

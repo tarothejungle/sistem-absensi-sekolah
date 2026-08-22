@@ -1,13 +1,15 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <title>Sistem Absensi Sekolah</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @include('partials.pwa-head')
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 
     {{-- Bootstrap --}}
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 
     {{-- Bootstrap Icons --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -17,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <script>
+    <script nonce='{{ request()->attributes->get('csp_nonce') }}'>
         (function() {
             try {
                 const savedTheme = localStorage.getItem('app_theme');
@@ -1131,7 +1133,7 @@
     @stack('styles')
 
     {{-- Final UI polish override --}}
-    <link href="{{ asset('css/absensi-ui-final.css') }}?v=20260712-rollback" rel="stylesheet">
+    <link href="{{ asset('css/absensi-ui-final.css') }}?v=20260809-export-sidebar" rel="stylesheet">
 </head>
 <body class="app-shell">
 
@@ -1139,7 +1141,7 @@
 
 @php
     $user = auth()->user();
-    $displayName = $user->name ?? $user->nip;
+    $displayName = $user->name ?? $user->username;
     $roleLabel = ucwords(str_replace('_', ' ', $user->role));
     $appPageTitle = match (true) {
         request()->routeIs('dashboard') => 'Dashboard',
@@ -1151,6 +1153,7 @@
         request()->routeIs('admin.attendance-sessions*') => 'Setting Sesi',
         request()->routeIs('admin.holidays*') => 'Setting Hari Libur',
         request()->routeIs('admin.duty-schedules*') => 'Setting Hari Piket',
+        request()->routeIs('admin.work-schedules*') => 'Setting Jadwal Kerja',
         request()->routeIs('reports.*') => 'Laporan Rekap Absensi',
         request()->routeIs('payroll.*') => 'Laporan Penggajian',
         request()->routeIs('infal.report.*') => 'Laporan Rekap Infal',
@@ -1167,7 +1170,7 @@
         ],
     ];
 
-    if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'])) {
+    if ($user->hasAttendanceAccess()) {
         $mobileNavItems[] = [
             'url' => route('attendance.index'),
             'active' => request()->routeIs('attendance.*'),
@@ -1176,7 +1179,7 @@
         ];
     }
 
-    if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'super_admin'])) {
+    if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'super_admin', 'tenaga_kependidikan'])) {
         $mobileNavItems[] = [
             'url' => route('leave.index'),
             'active' => request()->routeIs('leave.*'),
@@ -1252,7 +1255,7 @@
             'label' => 'Approval Izin/Cuti',
         ];
     } else {
-        if (in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'])) {
+        if ($user->hasAttendanceAccess()) {
             $mainSidebarItems[] = [
                 'url' => route('attendance.index'),
                 'active' => request()->routeIs('attendance.*'),
@@ -1292,6 +1295,12 @@
                 'active' => request()->routeIs('admin.duty-schedules*'),
                 'icon' => 'bi-person-check',
                 'label' => 'Setting Hari Piket',
+            ],
+            [
+                'url' => route('admin.work-schedules.index'),
+                'active' => request()->routeIs('admin.work-schedules*'),
+                'icon' => 'bi-calendar-week',
+                'label' => 'Setting Jadwal Kerja',
             ],
             [
                 'url' => route('admin.holidays.index'),
@@ -1388,7 +1397,6 @@
         <button
             class="app-menu-button"
             type="button"
-            onclick="toggleSidebar()"
             aria-label="Buka atau tutup menu navigasi"
             aria-controls="sidebar"
             aria-expanded="true"
@@ -1423,7 +1431,6 @@
             <button
                 type="button"
                 class="notification-button"
-                onclick="toggleNotificationDropdown()"
                 title="Notifikasi"
                 aria-label="Buka notifikasi"
                 aria-controls="notificationDropdown"
@@ -1456,12 +1463,19 @@
                                 default => 'bi-info-circle',
                             };
 
-                            $notificationUrl = $notification->is_dynamic
-                                ? ($notification->url ?? route('dashboard'))
-                                : route('notifications.read', $notification->id);
                         @endphp
 
-                        <a href="{{ $notificationUrl }}" class="notification-item {{ !$notification->read_at ? 'unread' : '' }}">
+                        @if($notification->id)
+                            <form action="{{ route('notifications.read', ['notification' => $notification->id]) }}" method="POST" class="m-0">
+                                @csrf
+                        @else
+                            <a href="{{ $notification->url ?: route('attendance.index') }}" class="notification-item text-start w-100 {{ !$notification->read_at ? 'unread' : '' }}">
+                        @endif
+                            @if($notification->id)
+                                <button type="submit" class="notification-item border-0 text-start w-100 {{ !$notification->read_at ? 'unread' : '' }}">
+                            @else
+                                <span class="d-flex align-items-start gap-2">
+                            @endif
                             <span class="notification-icon"><i class="bi {{ $icon }}"></i></span>
                             <span>
                                 <span class="notification-title d-block">{{ $notification->title }}</span>
@@ -1470,7 +1484,16 @@
                                     <span class="notification-time d-block">{{ $notification->created_at->diffForHumans() }}</span>
                                 @endif
                             </span>
-                        </a>
+                            @if($notification->id)
+                                </button>
+                            @else
+                                </span>
+                            @endif
+                        @if($notification->id)
+                            </form>
+                        @else
+                            </a>
+                        @endif
                     @empty
                         <div class="notification-empty">
                             <i class="bi bi-bell-slash d-block mb-2 fs-4"></i>
@@ -1484,7 +1507,6 @@
         <button
             type="button"
             class="profile-button"
-            onclick="toggleProfileDropdown()"
             aria-label="Buka menu profil"
             aria-controls="profileDropdown"
             aria-expanded="false"
@@ -1496,13 +1518,13 @@
 
             @if(auth()->user()->profile_photo)
             <img 
-                src="{{ asset(auth()->user()->profile_photo) }}" 
+                src="{{ route('profile.photo.show', auth()->user()) }}"
                 alt="Foto Profil"
                 class="profile-photo"
             >
         @else
             <div class="profile-initial">
-                {{ strtoupper(substr(auth()->user()->name ?? auth()->user()->nip, 0, 1)) }}
+                {{ strtoupper(substr(auth()->user()->name ?? auth()->user()->username, 0, 1)) }}
             </div>
         @endif
             <i class="bi bi-chevron-down profile-chevron" aria-hidden="true"></i>
@@ -1512,6 +1534,20 @@
             <a href="{{ route('profile.edit') }}">
                 <i class="bi bi-person me-2"></i> Ubah Profil
             </a>
+
+            <button type="button" class="pwa-push-toggle" data-pwa-push-toggle hidden>
+                <i class="bi bi-bell me-2"></i>Aktifkan notifikasi push
+            </button>
+
+            @if (! config('pwa.push_enabled'))
+                <span class="pwa-push-unavailable" role="status">
+                    <i class="bi bi-bell-slash me-2"></i>Notifikasi perangkat belum dikonfigurasi
+                </span>
+            @endif
+
+            <button type="button" class="pwa-push-toggle" data-pwa-install hidden>
+                <i class="bi bi-download me-2"></i>Instal aplikasi
+            </button>
 
             <a href="{{ route('profile.password.form') }}">
                 <i class="bi bi-key me-2"></i> Ubah Password
@@ -1528,7 +1564,7 @@
 </div>
 
 {{-- SIDEBAR --}}
-<div id="mobileSidebarBackdrop" class="mobile-sidebar-backdrop" onclick="toggleSidebar()"></div>
+<div id="mobileSidebarBackdrop" class="mobile-sidebar-backdrop"></div>
 <aside id="sidebar" class="app-sidebar" aria-label="Navigasi utama">
     <div class="sidebar-brand">
         <img src="{{ asset('images/logo-MI.png') }}" alt="Logo MI" class="sidebar-brand-logo">
@@ -1681,12 +1717,13 @@
     </section>
 </div>
 
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('mainContent');
     const sidebarToggleButtons = document.querySelectorAll('.app-menu-button');
     const profileToggleButton = document.querySelector('.profile-button');
     const notificationToggleButton = document.querySelector('.notification-button');
+    const mobileSidebarBackdrop = document.getElementById('mobileSidebarBackdrop');
     const themeToggleButton = document.getElementById('themeToggle');
     const logoutConfirmDialog = document.getElementById('logoutConfirmDialog');
     const logoutConfirmSubmit = document.getElementById('logoutConfirmSubmit');
@@ -1697,6 +1734,7 @@
     const appConfirmMessage = document.getElementById('appConfirmMessage');
     const appConfirmIcon = document.getElementById('appConfirmIcon');
     const appConfirmIconWrap = document.getElementById('appConfirmIconWrap');
+    const sidebarScrollStorageKey = 'app_sidebar_scroll_top_{{ auth()->id() }}';
     let pendingLogoutForm = null;
     let pendingConfirmForm = null;
     let pendingConfirmSubmitter = null;
@@ -1708,6 +1746,46 @@
 
         sidebarToggleButtons.forEach(function(button) {
             button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+    }
+
+    function saveDesktopSidebarScroll() {
+        if (!sidebar || window.innerWidth <= 768) {
+            return;
+        }
+
+        try {
+            window.sessionStorage.setItem(sidebarScrollStorageKey, String(sidebar.scrollTop));
+        } catch (error) {
+            // Navigasi tetap berfungsi jika penyimpanan browser dibatasi.
+        }
+    }
+
+    function restoreDesktopSidebarScroll() {
+        if (!sidebar || window.innerWidth <= 768) {
+            return;
+        }
+
+        let savedScrollTop = null;
+
+        try {
+            savedScrollTop = window.sessionStorage.getItem(sidebarScrollStorageKey);
+        } catch (error) {
+            savedScrollTop = null;
+        }
+
+        window.requestAnimationFrame(function() {
+            if (savedScrollTop !== null) {
+                const parsedScrollTop = Number(savedScrollTop);
+
+                if (Number.isFinite(parsedScrollTop) && parsedScrollTop >= 0) {
+                    sidebar.scrollTop = parsedScrollTop;
+                    return;
+                }
+            }
+
+            const activeSidebarLink = sidebar.querySelector('.sidebar-link.active');
+            activeSidebarLink?.scrollIntoView({ block: 'nearest' });
         });
     }
 
@@ -2087,6 +2165,30 @@
 
         applyAppTheme(getPreferredAppTheme());
 
+        restoreDesktopSidebarScroll();
+
+        sidebar?.addEventListener('scroll', saveDesktopSidebarScroll, { passive: true });
+        sidebar?.querySelectorAll('.sidebar-link').forEach(function(link) {
+            link.addEventListener('click', saveDesktopSidebarScroll);
+        });
+        window.addEventListener('pagehide', saveDesktopSidebarScroll);
+
+        sidebarToggleButtons.forEach(function(button) {
+            button.addEventListener('click', toggleSidebar);
+        });
+
+        if (mobileSidebarBackdrop) {
+            mobileSidebarBackdrop.addEventListener('click', toggleSidebar);
+        }
+
+        if (notificationToggleButton) {
+            notificationToggleButton.addEventListener('click', toggleNotificationDropdown);
+        }
+
+        if (profileToggleButton) {
+            profileToggleButton.addEventListener('click', toggleProfileDropdown);
+        }
+
         if (themeToggleButton) {
             themeToggleButton.addEventListener('click', function() {
                 const currentTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
@@ -2119,7 +2221,10 @@
                 logoutConfirmSubmit.disabled = true;
                 logoutConfirmSubmit.classList.add('is-loading');
                 pendingLogoutForm.dataset.logoutConfirmed = 'true';
-                pendingLogoutForm.submit();
+                Promise.resolve(typeof window.pwaBeforeLogout === 'function' ? window.pwaBeforeLogout() : null)
+                    .finally(function() {
+                        pendingLogoutForm.submit();
+                    });
             });
         }
 
@@ -2218,7 +2323,7 @@
     });
 </script>
 
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     function togglePasswordField(button) {
         const wrapper = button.closest('.password-wrapper');
         const input = wrapper.querySelector('input');
@@ -2318,43 +2423,189 @@
     });
 </script>
 
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     (function() {
-        var TIMEOUT_MS = 5 * 60 * 1000;
+        var TIMEOUT_MS = {{ max(1, (int) config('session.idle_timeout', 10)) }} * 60 * 1000;
+        var HEARTBEAT_INTERVAL_MS = Math.max(60 * 1000, Math.min(4 * 60 * 1000, Math.floor(TIMEOUT_MS / 2)));
+        var ACTIVITY_STORAGE_KEY = 'app_last_activity_at';
+        var LOGOUT_STORAGE_KEY = 'app_idle_logout_at';
+        var heartbeatUrl = @json(route('session.heartbeat'));
+        var logoutUrl = @json(route('logout'));
+        var loginUrl = @json(route('login', ['expired' => 1]));
+        var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         var idleTimer = null;
+        var logoutStarted = false;
+        var lastRecordedActivity = Date.now();
+        var lastHeartbeatActivity = lastRecordedActivity;
+        var heartbeatInFlight = false;
+
+        function storeValue(key, value) {
+            try {
+                window.localStorage.setItem(key, String(value));
+            } catch (error) {
+                // Timer tetap berjalan untuk tab ini jika penyimpanan browser dibatasi.
+            }
+        }
+
+        function storedActivity() {
+            var value = 0;
+
+            try {
+                value = Number(window.localStorage.getItem(ACTIVITY_STORAGE_KEY));
+            } catch (error) {
+                return lastRecordedActivity;
+            }
+
+            return Number.isFinite(value) && value > 0 ? value : lastRecordedActivity;
+        }
+
+        function scheduleLogout() {
+            clearTimeout(idleTimer);
+
+            var remaining = TIMEOUT_MS - (Date.now() - storedActivity());
+
+            if (remaining <= 0) {
+                forceLogout();
+                return;
+            }
+
+            idleTimer = setTimeout(forceLogout, remaining);
+        }
 
         function forceLogout() {
+            if (logoutStarted) {
+                return;
+            }
+
+            logoutStarted = true;
+            storeValue(LOGOUT_STORAGE_KEY, Date.now());
+
             var form = document.createElement('form');
             form.method = 'POST';
-            form.action = '{{ route("logout") }}';
+            form.action = logoutUrl;
 
             var csrfInput = document.createElement('input');
             csrfInput.type = 'hidden';
             csrfInput.name = '_token';
-            csrfInput.value = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            csrfInput.value = csrfToken;
             form.appendChild(csrfInput);
+
+            var reasonInput = document.createElement('input');
+            reasonInput.type = 'hidden';
+            reasonInput.name = 'reason';
+            reasonInput.value = 'idle';
+            form.appendChild(reasonInput);
 
             document.body.appendChild(form);
             form.submit();
+
+            window.setTimeout(function() {
+                window.location.replace(loginUrl);
+            }, 1500);
         }
 
-        function resetTimer() {
-            clearTimeout(idleTimer);
-            idleTimer = setTimeout(forceLogout, TIMEOUT_MS);
+        function recordActivity() {
+            var now = Date.now();
+
+            if (now - lastRecordedActivity < 1000) {
+                return;
+            }
+
+            lastRecordedActivity = now;
+            storeValue(ACTIVITY_STORAGE_KEY, now);
+            scheduleLogout();
+
+            if (now - lastHeartbeatActivity >= 60 * 1000) {
+                sendHeartbeat();
+            }
+        }
+
+        function sendHeartbeat() {
+            if (logoutStarted || document.hidden || heartbeatInFlight || lastRecordedActivity <= lastHeartbeatActivity) {
+                return;
+            }
+
+            if (Date.now() - storedActivity() >= TIMEOUT_MS) {
+                forceLogout();
+                return;
+            }
+
+            heartbeatInFlight = true;
+
+            fetch(heartbeatUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                keepalive: true
+            }).then(function(response) {
+                if (response.status === 401 || response.status === 419) {
+                    storeValue(LOGOUT_STORAGE_KEY, Date.now());
+                    window.location.replace(loginUrl);
+                    return;
+                }
+
+                if (response.ok) {
+                    lastHeartbeatActivity = lastRecordedActivity;
+                }
+            }).catch(function() {
+                // Kegagalan jaringan sementara tidak dihitung sebagai aktivitas pengguna.
+            }).finally(function() {
+                heartbeatInFlight = false;
+            });
         }
 
         var events = ['mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
         events.forEach(function(evt) {
-            document.addEventListener(evt, resetTimer, { passive: true });
+            document.addEventListener(evt, recordActivity, { passive: true });
         });
 
-        resetTimer();
+        window.addEventListener('storage', function(event) {
+            if (event.key === ACTIVITY_STORAGE_KEY) {
+                lastRecordedActivity = storedActivity();
+                scheduleLogout();
+            }
+
+            if (event.key === LOGOUT_STORAGE_KEY && event.newValue) {
+                window.location.replace(loginUrl);
+            }
+        });
+
+        document.addEventListener('visibilitychange', function() {
+            if (! document.hidden) {
+                if (Date.now() - storedActivity() >= TIMEOUT_MS) {
+                    forceLogout();
+                    return;
+                }
+
+                scheduleLogout();
+                sendHeartbeat();
+            }
+        });
+
+        window.addEventListener('pageshow', function() {
+            if (Date.now() - storedActivity() >= TIMEOUT_MS) {
+                forceLogout();
+            }
+        });
+
+        // Request halaman yang baru selesai adalah aktivitas sah, termasuk setelah login ulang.
+        lastRecordedActivity = Date.now();
+        storeValue(ACTIVITY_STORAGE_KEY, lastRecordedActivity);
+
+        scheduleLogout();
+        window.setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
     })();
 </script>
 
 @stack('scripts')
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+@include('partials.pwa-body')
+
+<script nonce='{{ request()->attributes->get('csp_nonce') }}' src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 
 </body>
 </html>

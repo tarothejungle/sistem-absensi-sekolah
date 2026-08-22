@@ -23,7 +23,7 @@
 
     <table class="no-border">
         <tr><td width="150">Nama</td><td>: {{ $item->teacher->nama_lengkap ?? '-' }}</td></tr>
-        <tr><td>Username/NIP</td><td>: {{ $item->teacher->user->nip ?? '-' }}</td></tr>
+        <tr><td>Username</td><td>: {{ $item->teacher->user->username ?? '-' }}</td></tr>
         <tr><td>Jabatan</td><td>: {{ $item->teacher->jabatan ?? '-' }}</td></tr>
     </table>
 

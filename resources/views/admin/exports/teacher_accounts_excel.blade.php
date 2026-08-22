@@ -14,7 +14,7 @@
     <tbody>
         @foreach($teachers as $teacher)
             <tr>
-                <td>{{ \App\Support\ExcelCell::escape($teacher->user->nip ?? '-') }}</td>
+                <td>{{ \App\Support\ExcelCell::escape($teacher->user->username ?? '-') }}</td>
                 <td>{{ \App\Support\ExcelCell::escape($teacher->nama_lengkap ?? '-') }}</td>
                 <td>{{ \App\Support\ExcelCell::escape(\App\Models\Teacher::dataGuruRoleLabel($teacher->user->role ?? null)) }}</td>
                 <td>{{ \App\Support\ExcelCell::escape($teacher->user->email ?? '-') }}</td>

@@ -7,15 +7,16 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-class PruneAttendanceFacePhotos extends Command
+class PruneAttendancePhotos extends Command
 {
-    protected $signature = 'attendance:prune-face-photos {--days= : Override the configured retention period}';
+    protected $signature = 'attendance:prune-photos {--days= : Override the configured retention period}';
 
-    protected $description = 'Delete expired private attendance face photos without deleting attendance records';
+    protected $description = 'Delete expired private attendance photos without deleting attendance records';
 
     public function handle(): int
     {
-        $days = $this->option('days') ?? config('services.attendance.face_photo_retention_days', 30);
+        $days = $this->option('days')
+            ?? config('attendance.photo_retention_days', 30);
 
         if (filter_var($days, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
             $this->error('Masa retensi harus berupa bilangan bulat minimal 1 hari.');
@@ -42,7 +43,7 @@ class PruneAttendanceFacePhotos extends Command
 
                         if (! is_string($path) || ! str_starts_with($path, 'attendance_faces/') || str_contains($path, '..')) {
                             if ($path !== null) {
-                                Log::warning('Skipped unsafe attendance face photo path.', [
+                                Log::warning('Skipped unsafe attendance photo path.', [
                                     'attendance_id' => $attendance->id,
                                     'column' => $column,
                                 ]);
@@ -53,7 +54,7 @@ class PruneAttendanceFacePhotos extends Command
 
                         $disk = Storage::disk('local');
                         if ($disk->exists($path) && ! $disk->delete($path)) {
-                            Log::warning('Unable to delete expired attendance face photo.', [
+                            Log::warning('Unable to delete expired attendance photo.', [
                                 'attendance_id' => $attendance->id,
                                 'column' => $column,
                             ]);

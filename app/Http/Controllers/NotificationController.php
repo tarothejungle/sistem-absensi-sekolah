@@ -11,7 +11,7 @@ class NotificationController extends Controller
     {
         abort_unless((int) $notification->user_id === (int) auth()->id(), 403);
 
-        if (!$notification->read_at) {
+        if (! $notification->read_at) {
             $notification->update(['read_at' => now()]);
         }
 
@@ -29,20 +29,27 @@ class NotificationController extends Controller
 
     private function safeRedirectUrl(?string $url): string
     {
-        if (!$url) {
+        if (! $url) {
             return route('dashboard');
         }
 
         $url = trim($url);
 
-        if (str_starts_with($url, '/')) {
+        if (str_starts_with($url, '/') && ! str_starts_with($url, '//')) {
             return $url;
         }
 
         $appHost = parse_url(config('app.url'), PHP_URL_HOST);
         $targetHost = parse_url($url, PHP_URL_HOST);
 
-        if ($targetHost && $appHost && strcasecmp($targetHost, $appHost) === 0) {
+        $targetScheme = parse_url($url, PHP_URL_SCHEME);
+        $targetUser = parse_url($url, PHP_URL_USER);
+
+        if ($targetHost
+            && $appHost
+            && in_array($targetScheme, ['http', 'https'], true)
+            && $targetUser === null
+            && strcasecmp($targetHost, $appHost) === 0) {
             return $url;
         }
 

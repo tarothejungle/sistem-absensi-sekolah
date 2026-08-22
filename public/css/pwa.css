@@ -1,0 +1,6 @@
+.pwa-offline-banner { display: none; position: fixed; inset: 0 0 auto; z-index: 2000; padding: 8px 16px; background: #7b2d26; color: #fff; text-align: center; font-size: .82rem; }
+html.pwa-is-offline .pwa-offline-banner { display: block; }
+html.pwa-is-offline [data-pwa-online-required] { cursor: not-allowed; opacity: .6; }
+.pwa-push-toggle { width: 100%; border: 0; background: transparent; color: inherit; padding: 10px 14px; text-align: left; font: inherit; cursor: pointer; }
+.pwa-push-toggle:hover { background: rgba(31, 79, 70, .08); }
+.pwa-push-unavailable { display: block; padding: 10px 14px; color: #6b7280; font-size: 13px; line-height: 1.35; }

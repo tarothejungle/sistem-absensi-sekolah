@@ -60,7 +60,7 @@
                                 <td>
                                     <input type="checkbox" name="user_ids[]" value="{{ $user->id }}" class="form-check-input" data-row-check @disabled(auth()->id() === $user->id)>
                                 </td>
-                                <td>{{ $user->nip }}</td>
+                                <td>{{ $user->username }}</td>
                                 <td>{{ $user->name }}</td>
                                 <td>
                                     @if($user->role === 'bendahara')

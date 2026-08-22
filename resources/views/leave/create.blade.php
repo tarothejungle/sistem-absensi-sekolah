@@ -8,7 +8,7 @@
 <div class="container-fluid">
     <div class="ui-page-hero">
         <h3>Form Pengajuan Izin/Cuti</h3>
-        <p>Ajukan izin atau cuti beserta guru pengganti/infal.</p>
+        <p>Ajukan izin sementara atau izin/cuti sehari penuh sesuai kebutuhan.</p>
     </div>
 
     <form
@@ -42,6 +42,7 @@
                     {{ $isSementara ? 'checked' : '' }}
                 >
                 <label class="form-check-label" for="is_sementara">Izin sementara</label>
+                <small class="text-muted d-block">Gunakan ketika Anda tetap akan hadir setelah kendala selesai. Guru pengganti tidak diperlukan.</small>
             </div>
 
             @error('is_sementara')
@@ -49,9 +50,9 @@
             @enderror
 
             <div class="row g-3">
-                <div class="col-lg-3 col-md-6 ui-field">
+                <div class="col-lg-3 col-md-6 ui-field {{ $isSementara ? 'd-none' : '' }}" data-leave-full-day-field>
                     <label>Jenis</label>
-                    <select name="jenis_pengajuan" class="form-select" required>
+                    <select name="jenis_pengajuan" class="form-select" required {{ $isSementara ? 'disabled' : '' }}>
                         <option value="sakit" {{ old('jenis_pengajuan', 'sakit') == 'sakit' ? 'selected' : '' }}>Sakit</option>
                         <option value="izin" {{ old('jenis_pengajuan', 'sakit') == 'izin' ? 'selected' : '' }}>Izin</option>
                         <option value="cuti" {{ old('jenis_pengajuan', 'sakit') == 'cuti' ? 'selected' : '' }}>Cuti</option>
@@ -61,6 +62,11 @@
                     @error('jenis_pengajuan')
                         <small class="text-danger d-block">{{ $message }}</small>
                     @enderror
+                </div>
+
+                <div class="col-lg-3 col-md-6 ui-field {{ $isSementara ? '' : 'd-none' }}" data-leave-temporary-field>
+                    <label>Jenis</label>
+                    <input type="text" class="form-control" value="Izin Sementara" disabled>
                 </div>
 
                 <div class="col-lg-3 col-md-6 ui-field">
@@ -128,32 +134,38 @@
             </div>
         </div>
 
-        <div class="ui-form-section">
+        <div class="ui-form-section {{ $isSementara ? 'd-none' : '' }}" data-leave-infal-section>
             <div class="ui-form-section-head">
                 <span class="ui-form-section-icon"><i class="bi bi-person-check"></i></span>
                 <div>
                     <h5 class="ui-form-section-title">Guru Pengganti</h5>
-                    <p class="ui-form-section-subtitle">Kosongkan jika pengajuan tidak membutuhkan guru pengganti/infal.</p>
+                    <p class="ui-form-section-subtitle">Pilih satu atau beberapa guru. Kosongkan jika tidak membutuhkan infal.</p>
                 </div>
             </div>
 
-            <div class="ui-field">
-                <label class="form-label">Guru Pengganti / Guru Infal</label>
+            <div class="ui-field" data-infal-picker>
+                <label class="form-label" for="infal-search">Guru Pengganti / Guru Infal</label>
+                <input id="infal-search" type="search" class="form-control mb-2" placeholder="Cari nama guru" data-infal-search>
+                <div class="border rounded p-2" style="max-height: 16rem; overflow-y: auto;">
+                    @forelse($teachers as $teacher)
+                        <label class="form-check py-1 mb-0" data-infal-option data-search-text="{{ Str::lower($teacher->nama_lengkap.' '.($teacher->mata_pelajaran ?? '')) }}">
+                            <input class="form-check-input" type="checkbox" name="infal_teacher_ids[]" value="{{ $teacher->id }}" {{ in_array($teacher->id, old('infal_teacher_ids', [])) ? 'checked' : '' }}>
+                            <span class="form-check-label">
+                                {{ $teacher->nama_lengkap }}
+                                @if($teacher->mata_pelajaran)
+                                    <small class="text-muted">- {{ $teacher->mata_pelajaran }}</small>
+                                @endif
+                            </span>
+                        </label>
+                    @empty
+                        <span class="text-muted">Belum ada guru aktif yang dapat dipilih.</span>
+                    @endforelse
+                </div>
 
-                <select name="infal_teacher_id" class="form-select">
-                    <option value="">Tidak menggunakan guru pengganti</option>
-
-                    @foreach($teachers as $teacher)
-                        <option value="{{ $teacher->id }}" {{ old('infal_teacher_id') == $teacher->id ? 'selected' : '' }}>
-                            {{ $teacher->nama_lengkap }}
-                            @if($teacher->mapel)
-                                - {{ $teacher->mapel }}
-                            @endif
-                        </option>
-                    @endforeach
-                </select>
-
-                @error('infal_teacher_id')
+                @error('infal_teacher_ids')
+                    <small class="text-danger d-block">{{ $message }}</small>
+                @enderror
+                @error('infal_teacher_ids.*')
                     <small class="text-danger d-block">{{ $message }}</small>
                 @enderror
             </div>
@@ -164,7 +176,7 @@
                 <span class="ui-form-section-icon"><i class="bi bi-card-text"></i></span>
                 <div>
                     <h5 class="ui-form-section-title">Alasan dan Lampiran</h5>
-                    <p class="ui-form-section-subtitle">Tulis alasan singkat dan lampirkan bukti jika diperlukan.</p>
+                    <p class="ui-form-section-subtitle">Tulis alasan yang jelas dan lampirkan bukti pendukung jika tersedia.</p>
                 </div>
             </div>
 
@@ -216,13 +228,24 @@
 @endsection
 
 @push('scripts')
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-infal-picker]').forEach(function (picker) {
+            const search = picker.querySelector('[data-infal-search]');
+            search.addEventListener('input', function () {
+                const keyword = search.value.toLocaleLowerCase().trim();
+                picker.querySelectorAll('[data-infal-option]').forEach(function (option) {
+                    option.classList.toggle('d-none', !option.dataset.searchText.includes(keyword));
+                });
+            });
+        });
+
         document.querySelectorAll('[data-leave-duration-form]').forEach(function (form) {
             const toggle = form.querySelector('[data-leave-temporary-toggle]');
             const startLabel = form.querySelector('[data-leave-start-label]');
             const endDateInput = form.querySelector('[data-leave-end-date]');
             const fullDayFields = form.querySelectorAll('[data-leave-full-day-field]');
+            const infalSections = form.querySelectorAll('[data-leave-infal-section]');
             const temporaryFields = form.querySelectorAll('[data-leave-temporary-field]');
             const temporaryInputs = form.querySelectorAll('[data-leave-temporary-input]');
 
@@ -235,6 +258,19 @@
 
                 fullDayFields.forEach(function (field) {
                     field.classList.toggle('d-none', isTemporary);
+                    field.querySelectorAll('input, select, textarea').forEach(function (input) {
+                        input.disabled = isTemporary;
+                    });
+                });
+
+                infalSections.forEach(function (section) {
+                    section.classList.toggle('d-none', isTemporary);
+                    section.querySelectorAll('input, select, textarea').forEach(function (input) {
+                        if (isTemporary && input.matches('input[name="infal_teacher_ids[]"]')) {
+                            input.checked = false;
+                        }
+                        input.disabled = isTemporary;
+                    });
                 });
 
                 temporaryFields.forEach(function (field) {

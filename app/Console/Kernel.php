@@ -12,12 +12,35 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command('attendance:prune-face-photos')
+        // Status otomatis (alfa / izin / hadir tidak lengkap) tidak boleh bergantung
+        // pada ada-tidaknya orang membuka dashboard. Dijadwalkan tiap 15 menit agar
+        // cutoff per sesi tetap terkejar, plus sekali di penghujung hari.
+        $schedule->command('attendance:sync-status')
+            ->everyFifteenMinutes()
+            ->withoutOverlapping();
+
+        $schedule->command('attendance:sync-status')
+            ->dailyAt('23:55')
+            ->withoutOverlapping();
+
+        $schedule->command('attendance:prune-photos')
             ->dailyAt('02:15')
             ->withoutOverlapping();
 
         $schedule->command('login-activities:prune')
-            ->everyMinute()
+            ->hourly()
+            ->withoutOverlapping();
+
+        $schedule->command('auth:clear-resets')
+            ->dailyAt('02:30')
+            ->withoutOverlapping();
+
+        $schedule->command('biometrics:prune-liveness-challenges')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
+        $schedule->command('notifications:send-attendance-reminders')
+            ->everyFiveMinutes()
             ->withoutOverlapping();
     }
 

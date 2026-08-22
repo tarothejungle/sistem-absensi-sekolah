@@ -50,6 +50,13 @@ class Teacher extends Model
         return $this->hasMany(LeaveRequest::class);
     }
 
+    public function infalLeaves(): BelongsToMany
+    {
+        return $this->belongsToMany(LeaveRequest::class, 'leave_request_infal', 'teacher_id', 'leave_request_id')
+            ->withPivot(['status_infal', 'catatan_infal'])
+            ->withTimestamps();
+    }
+
     public function salary(): HasOne
     {
         return $this->hasOne(TeacherSalary::class);
@@ -77,6 +84,29 @@ class Teacher extends Model
             'attendance_session_teacher',
             'teacher_id',
             'attendance_session_id'
-        );
+        )->withPivot('is_primary')->withTimestamps();
+    }
+
+    public function primaryAttendanceSession()
+    {
+        return $this->belongsToMany(
+            AttendanceSession::class,
+            'attendance_session_teacher',
+            'teacher_id',
+            'attendance_session_id'
+        )->withPivot('is_primary')->wherePivot('is_primary', true);
+    }
+
+    public function getPrimarySessionAttribute()
+    {
+        if ($this->relationLoaded('attendanceSessions')) {
+            return $this->attendanceSessions->firstWhere('pivot.is_primary', true);
+        }
+
+        if ($this->relationLoaded('primaryAttendanceSession')) {
+            return $this->primaryAttendanceSession->first();
+        }
+
+        return $this->primaryAttendanceSession()->first();
     }
 }

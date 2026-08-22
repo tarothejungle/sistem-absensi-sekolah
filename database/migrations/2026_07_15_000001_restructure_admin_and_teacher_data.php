@@ -17,7 +17,7 @@ return new class extends Migration
                 if (! DB::table('teachers')->where('user_id', $user->id)->exists()) {
                     DB::table('teachers')->insert([
                         'user_id' => $user->id,
-                        'nama_lengkap' => $user->name ?: $user->nip,
+                        'nama_lengkap' => $user->name ?: $user->username,
                         'email' => $user->email,
                         'created_at' => now(),
                         'updated_at' => now(),

@@ -25,10 +25,10 @@
         justify-content: center;
         gap: 7px;
         min-width: 92px;
-        height: 40px;
-        border-radius: 10px;
-        font-weight: 600;
-        font-size: 12px;
+        height: 48px;
+        border-radius: var(--ui-radius-sm, 8px);
+        font-weight: 800;
+        font-size: 14px;
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
         transition: all 0.2s ease;
     }
@@ -49,7 +49,7 @@
             margin-top: 0 !important;
             margin-bottom: 14px !important;
             justify-content: stretch !important;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .report-action-buttons .btn-report-action,
@@ -62,7 +62,7 @@
 
         .report-action-buttons {
             display: grid !important;
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             gap: 10px !important;
             align-items: stretch !important;
         }
@@ -74,9 +74,9 @@
         .report-action-buttons .btn-report-action {
             display: inline-flex !important;
             min-width: 0 !important;
-            height: 42px;
+            height: 48px;
             padding: 8px 6px !important;
-            font-size: 12px !important;
+            font-size: 14px !important;
             gap: 4px !important;
             margin: 0 !important;
             overflow: hidden;
@@ -115,22 +115,31 @@
             <span>Filter</span>
         </button>
 
-        <a
-            href="{{ route('reports.export.excel', request()->query()) }}"
-            class="btn btn-success btn-report-action"
-        >
-            <i class="bi bi-file-earmark-excel-fill"></i>
-            <span>Excel</span>
-        </a>
-
-        <a
-            href="{{ route('reports.export.pdf', request()->query()) }}"
-            class="btn btn-danger btn-report-action"
-            target="_blank"
-        >
-            <i class="bi bi-file-earmark-pdf-fill"></i>
-            <span>PDF</span>
-        </a>
+        <div class="dropdown app-export-dropdown">
+            <button
+                type="button"
+                class="btn dropdown-toggle app-export-toggle btn-report-action"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+            >
+                <i class="bi bi-box-arrow-up"></i>
+                <span>Export</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end app-export-menu">
+                <li>
+                    <a href="{{ route('reports.export.pdf', request()->query()) }}" class="dropdown-item" target="_blank" rel="noopener">
+                        <i class="bi bi-file-earmark-pdf-fill app-export-pdf-icon"></i>
+                        <span>Cetak PDF</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ route('reports.export.excel', request()->query()) }}" class="dropdown-item">
+                        <i class="bi bi-file-earmark-excel-fill app-export-excel-icon"></i>
+                        <span>Export Excel</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 
         <div class="card mb-3 ui-filter-card">
@@ -295,6 +304,9 @@
                                 @else
                                     <span class="attendance-face-empty">Tidak ada</span>
                                 @endif
+                                @if($attendance->temporaryLeaveRequest)
+                                    <span class="badge bg-info text-dark">Grace izin sementara #{{ $attendance->temporaryLeaveRequest->id }}</span>
+                                @endif
                             </td>
                             <td>
                                 @if($attendance->status_kehadiran === 'hadir')
@@ -332,14 +344,15 @@
                     @endforelse
                 </tbody>
             </table>
-            </div>
         </div>
+        <div class="mt-3">{{ $attendances->links('pagination::bootstrap-5') }}</div>
+    </div>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}' src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" crossorigin="anonymous"></script>
 
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     const chartLabels = @json($chartLabels);
     const chartData = @json($chartData);
 

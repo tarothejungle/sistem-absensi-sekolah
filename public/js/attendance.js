@@ -1,293 +1,172 @@
 document.addEventListener('DOMContentLoaded', async function () {
     const videos = document.querySelectorAll('.attendance-video');
     const forms = document.querySelectorAll('.absensi-form');
-    const maxAttempts = Number(window.attendanceFaceOptions?.maxAttempts ?? 3);
+    const options = window.attendanceFaceOptions || {};
+    const maxAttempts = Number(options.maxAttempts || 3);
     const attempts = new Map();
+    const countableFailures = new Set([
+        'face_mismatch', 'face_not_found', 'multiple_faces', 'face_too_small',
+        'face_partial', 'face_pose_invalid', 'face_blurry', 'face_too_dark',
+        'face_overexposed', 'face_low_quality', 'face_occluded',
+        'face_visibility_low', 'invalid_image', 'invalid_embedding', 'model_mismatch',
+    ]);
     const SPINNER = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> ';
+    const readiness = document.getElementById('biometric-readiness');
+    const serviceBadge = document.getElementById('biometric-service-badge');
+    const readinessMessage = document.getElementById('biometric-readiness-message');
+    const modelVersion = document.getElementById('biometric-model-version');
+    const retryButton = document.getElementById('biometric-status-retry');
+    let biometricReady = false;
+    let cameraReady = videos.length === 0;
+    let cameraStream = null;
 
-    function notify(message, title) {
+    function notify(message, title, type) {
         if (typeof window.showAppToast === 'function') {
-            window.showAppToast('danger', message, title || 'Absensi Gagal');
+            window.showAppToast(type || 'danger', message, title || 'Absensi');
         } else {
             alert(message);
         }
     }
 
-    function errorMessage(err) {
-        if (!err) {
-            return 'Terjadi kesalahan. Silakan coba lagi.';
-        }
+    function setReadinessState(payload) {
+        if (!readiness) return;
+        const service = payload?.service || {};
+        const enrollment = payload?.enrollment || {};
+        biometricReady = payload?.ready === true && service.ready === true;
+        readiness.classList.toggle('is-ready', biometricReady);
+        readiness.classList.toggle('is-error', !biometricReady && service.state !== 'starting');
 
-        return typeof err === 'string' ? err : (err.message || 'Terjadi kesalahan. Silakan coba lagi.');
+        if (serviceBadge) {
+            const labels = {
+                ready: 'FastAPI + face match siap',
+                starting: 'Model memuat',
+                unavailable: 'FastAPI offline',
+                misconfigured: 'Konfigurasi belum siap',
+                model_mismatch: 'Model tidak cocok',
+                quality_unavailable: 'Quality gate belum siap',
+            };
+            serviceBadge.textContent = labels[service.state] || 'Status tidak diketahui';
+            serviceBadge.className = 'badge ' + (biometricReady ? 'bg-success' : service.state === 'starting' ? 'bg-warning text-dark' : 'bg-danger');
+        }
+        if (readinessMessage) readinessMessage.textContent = payload?.message || service.message || 'Status biometrik belum tersedia.';
+        if (modelVersion) {
+            const version = service.model_version || 'belum terbaca';
+            modelVersion.textContent = enrollment.compatible
+                ? 'Template kompatibel. Model aktif: ' + version + '. Face match siap untuk absensi.'
+                : 'Model aktif: ' + version + '. Enrollment dengan liveness diperlukan sebelum absensi.';
+        }
+        syncButtons();
+    }
+
+    function syncButtons() {
+        forms.forEach(function (form) {
+            const button = form.querySelector('button[type="submit"]');
+            if (!button || button.dataset.processing === 'true') return;
+            button.disabled = form.dataset.actionEnabled !== '1' || !biometricReady || !cameraReady || !navigator.onLine;
+        });
+    }
+
+    async function checkBiometricStatus() {
+        if (!options.statusUrl) return;
+        if (retryButton) { retryButton.disabled = true; retryButton.setAttribute('aria-busy', 'true'); }
+        try {
+            const response = await fetch(options.statusUrl, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
+            setReadinessState(await response.json());
+        } catch (error) {
+            setReadinessState({ ready: false, message: 'Status FastAPI tidak dapat dimuat. Coba cek ulang.', service: { ready: false, state: 'unavailable', message: error.message }, enrollment: { compatible: false } });
+        } finally {
+            if (retryButton) { retryButton.disabled = false; retryButton.removeAttribute('aria-busy'); }
+        }
     }
 
     async function startCamera() {
+        if (videos.length === 0) { syncButtons(); return; }
         try {
-            if (!navigator.mediaDevices?.getUserMedia) {
-                notify('Browser tidak mendukung akses kamera. Pastikan membuka aplikasi lewat HTTPS.', 'Kamera tidak didukung');
-                return;
-            }
-
-            if (videos.length === 0) {
-                return;
-            }
-
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-                audio: false,
-            });
-
-            videos.forEach(function (video) {
-                video.srcObject = stream;
-                video.muted = true;
-                video.playsInline = true;
-                video.onloadedmetadata = function () {
-                    video.play().catch(function (error) {
-                        console.error('Video play error:', error);
-                    });
-                };
-            });
+            cameraStream = await window.BiometricLiveness.startCamera(videos[0]);
+            videos.forEach(function (video) { window.BiometricLiveness.attachStream(video, cameraStream); });
+            cameraReady = true;
+            syncButtons();
         } catch (error) {
-            let message = 'Kamera tidak bisa diakses.';
-
-            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                message = 'Akses kamera ditolak. Aktifkan izin kamera untuk situs ini di pengaturan browser.';
-            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                message = 'Kamera tidak ditemukan di perangkat ini.';
-            } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-                message = 'Kamera sedang digunakan aplikasi/tab lain atau terkunci oleh sistem.';
-            }
-
-            notify(message + ' (Kode: ' + (error.name || '-') + ')', 'Kamera Bermasalah');
+            notify(error.message || 'Kamera tidak dapat diakses.', 'Kamera Bermasalah');
         }
     }
 
-    function isPermissionDenied(error) {
-        return !!error && (error.code === 1 || error.name === 'PermissionDeniedError' || error.name === 'NotAllowedError');
-    }
-
-    function requestPosition(options) {
-        return new Promise(function (resolve, reject) {
-            navigator.geolocation.getCurrentPosition(function (position) {
-                resolve({ lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy });
-            }, reject, options);
-        });
-    }
-
-    function withWatchdog(promise, milliseconds) {
-        let timer = null;
-        const watchdog = new Promise(function (_, reject) {
-            timer = window.setTimeout(function () {
-                const error = new Error('watchdog-timeout');
-                error.code = 3;
-                reject(error);
-            }, milliseconds);
-        });
-
-        return Promise.race([promise, watchdog]).finally(function () {
-            window.clearTimeout(timer);
-        });
-    }
+    function isPermissionDenied(error) { return !!error && (error.code === 1 || error.name === 'PermissionDeniedError' || error.name === 'NotAllowedError'); }
+    function requestPosition(options) { return new Promise(function (resolve, reject) { navigator.geolocation.getCurrentPosition(function (position) { resolve({ lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy }); }, reject, options); }); }
+    function withWatchdog(promise, milliseconds) { let timer = null; const watchdog = new Promise(function (_, reject) { timer = window.setTimeout(function () { const error = new Error('watchdog-timeout'); error.code = 3; reject(error); }, milliseconds); }); return Promise.race([promise, watchdog]).finally(function () { window.clearTimeout(timer); }); }
 
     async function getLocation() {
-        if (!navigator.geolocation) {
-            throw new Error('Perangkat/browser tidak mendukung GPS. Absensi membutuhkan lokasi.');
-        }
-
-        try {
-            return await withWatchdog(requestPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }), 18000);
-        } catch (error) {
-            if (isPermissionDenied(error)) {
-                throw new Error('Izin lokasi ditolak. Aktifkan izin lokasi untuk situs ini di pengaturan browser, lalu coba lagi.');
-            }
-
-            try {
-                return await withWatchdog(requestPosition({ enableHighAccuracy: false, timeout: 12000, maximumAge: 30000 }), 15000);
-            } catch (fallbackError) {
-                if (isPermissionDenied(fallbackError)) {
-                    throw new Error('Izin lokasi ditolak. Aktifkan izin lokasi untuk situs ini di pengaturan browser, lalu coba lagi.');
-                }
-
-                throw new Error('Lokasi GPS tidak terbaca. Pastikan GPS/Location aktif, berada di area terbuka, lalu coba lagi.');
+        if (!navigator.geolocation) throw new Error('Perangkat/browser tidak mendukung GPS. Absensi membutuhkan lokasi.');
+        try { return await withWatchdog(requestPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }), 18000); } catch (error) {
+            if (isPermissionDenied(error)) throw new Error('Izin lokasi ditolak. Aktifkan izin lokasi untuk situs ini lalu coba lagi.');
+            try { return await withWatchdog(requestPosition({ enableHighAccuracy: false, timeout: 12000, maximumAge: 30000 }), 15000); } catch (fallbackError) {
+                if (isPermissionDenied(fallbackError)) throw new Error('Izin lokasi ditolak. Aktifkan izin lokasi untuk situs ini lalu coba lagi.');
+                throw new Error('Lokasi GPS tidak terbaca. Pastikan Location aktif dan berada di area terbuka.');
             }
         }
     }
 
-    function captureFace(sessionId) {
-        const video = document.getElementById('video-' + sessionId);
-        const canvas = document.getElementById('canvas-' + sessionId);
+    function showOverlay(sessionId, className) { const overlay = document.getElementById('overlay-' + sessionId); if (overlay) { overlay.style.display = 'flex'; overlay.className = 'face-scan-overlay ' + (className || ''); } }
+    function hideOverlay(sessionId) { const overlay = document.getElementById('overlay-' + sessionId); if (overlay) { overlay.style.display = 'none'; overlay.className = 'face-scan-overlay'; } }
+    function setOverlayStatus(sessionId, text) { const label = document.getElementById('overlay-' + sessionId)?.querySelector('.scan-status-label'); if (label) label.textContent = text; }
+    function setStep(sessionId, step, state) { const card = document.getElementById('video-' + sessionId)?.closest('.card'); card?.querySelectorAll('[data-biometric-step]').forEach(function (item) { item.classList.toggle('is-active', item.dataset.biometricStep === step && state === 'active'); item.classList.toggle('is-complete', item.dataset.biometricStep === step && state === 'complete'); item.classList.toggle('is-error', item.dataset.biometricStep === step && state === 'error'); }); }
 
-        if (!video || !canvas) {
-            throw new Error('Kamera untuk sesi ini tidak ditemukan.');
-        }
-
-        if (!video.videoWidth || !video.videoHeight) {
-            throw new Error('Kamera belum siap. Tunggu beberapa detik hingga gambar muncul, lalu coba lagi.');
-        }
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const context = canvas.getContext('2d');
-        context.save();
-        context.translate(canvas.width, 0);
-        context.scale(-1, 1);
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        context.restore();
-
-        return { canvas: canvas, image: canvas.toDataURL('image/jpeg', 0.85) };
-    }
-
-    function showOverlay(sessionId, className) {
-        const overlay = document.getElementById('overlay-' + sessionId);
-        if (overlay) {
-            overlay.style.display = 'flex';
-            overlay.className = 'face-scan-overlay ' + (className || '');
-        }
-    }
-
-    function hideOverlay(sessionId) {
-        const overlay = document.getElementById('overlay-' + sessionId);
-        if (overlay) {
-            overlay.style.display = 'none';
-            overlay.className = 'face-scan-overlay';
-        }
-    }
-
-    function setOverlayStatus(sessionId, text) {
-        const overlay = document.getElementById('overlay-' + sessionId);
-        if (overlay) {
-            const label = overlay.querySelector('.scan-status-label');
-            if (label) {
-                label.textContent = text;
-            }
-        }
-    }
-
-    function setOverlayCountdown(sessionId, number) {
-        const overlay = document.getElementById('overlay-' + sessionId);
-        if (overlay) {
-            const countdown = overlay.querySelector('.scan-countdown');
-            if (countdown) {
-                countdown.textContent = number;
-                countdown.style.animation = 'none';
-                void countdown.offsetHeight;
-                countdown.style.animation = '';
-            }
-        }
-    }
-
-    function countdown(sessionId, seconds) {
-        return new Promise(function (resolve) {
-            let remaining = seconds;
-
-            function tick() {
-                if (remaining <= 0) {
-                    resolve();
-                    return;
-                }
-
-                showOverlay(sessionId, 'countdown');
-                setOverlayCountdown(sessionId, remaining);
-                remaining--;
-
-                setTimeout(tick, 1000);
-            }
-
-            tick();
-        });
+    async function submitAttendance(form, sessionId, location, biometricPayload) {
+        const data = new FormData(form);
+        data.set('latitude', location.lat); data.set('longitude', location.lng); data.set('accuracy', location.accuracy ?? '');
+        if (biometricPayload.faceImage) data.set('face_image', biometricPayload.faceImage);
+        if (biometricPayload.challengeId) data.set('liveness_challenge_id', biometricPayload.challengeId);
+        (biometricPayload.frames || []).forEach(function (frame) { data.append('liveness_frames[]', frame); });
+        const response = await fetch(form.action, { method: 'POST', body: data, credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+        const payload = await response.json().catch(function () { return {}; });
+        if (!response.ok || payload.ok !== true) { const error = new Error(payload.message || 'Verifikasi biometrik gagal.'); error.code = payload.code || 'attendance_failed'; error.stage = payload.stage || 'verify'; error.retryable = payload.retryable === true; throw error; }
+        setStep(sessionId, 'verify', 'complete'); setStep(sessionId, 'save', 'complete');
+        return payload;
     }
 
     forms.forEach(function (form) {
         form.addEventListener('submit', async function (event) {
             event.preventDefault();
             const button = form.querySelector('button[type="submit"]');
-            const attemptKey = form.action + ':' + form.querySelector('[name="attendance_session_id"]')?.value;
-            const currentAttempts = attempts.get(attemptKey) ?? 0;
-
-            if (button?.dataset.processing === 'true' || currentAttempts >= maxAttempts) {
-                return;
-            }
-
-            const originalText = button?.innerHTML ?? '';
-            const lockButton = function () {
-                if (button) {
-                    button.dataset.processing = 'true';
-                    button.disabled = true;
-                    button.setAttribute('aria-busy', 'true');
-                }
-            };
-            const releaseButton = function () {
-                if (button) {
-                    delete button.dataset.processing;
-                    button.disabled = false;
-                    button.removeAttribute('aria-busy');
-                    button.innerHTML = originalText;
-                }
-            };
-            const setButtonText = function (text) {
-                if (button) {
-                    button.innerHTML = text;
-                }
-            };
-
-            let sessionId = null;
-
+            const sessionId = form.querySelector('[name="attendance_session_id"]')?.value;
+            const attemptKey = form.action + ':' + sessionId;
+            const currentAttempts = attempts.get(attemptKey) || 0;
+            if (!sessionId || button?.dataset.processing === 'true' || currentAttempts >= maxAttempts) return;
+            if (!biometricReady) { await checkBiometricStatus(); if (!biometricReady) { notify('Verifikasi biometrik belum siap.', 'Biometrik Belum Siap'); return; } }
+            const originalText = button.innerHTML;
+            button.dataset.processing = 'true'; button.disabled = true; button.setAttribute('aria-busy', 'true');
             try {
-                sessionId = form.querySelector('[name="attendance_session_id"]')?.value;
-                if (!sessionId) {
-                    throw new Error('Sesi absensi tidak ditemukan.');
+                setStep(sessionId, 'gps', 'active'); button.innerHTML = SPINNER + 'Mengambil lokasi...'; showOverlay(sessionId); setOverlayStatus(sessionId, 'Mengambil lokasi GPS...');
+                const location = await getLocation(); setStep(sessionId, 'gps', 'complete');
+                let biometricPayload;
+                if (options.livenessRequired) {
+                    setStep(sessionId, 'liveness', 'active'); button.innerHTML = SPINNER + 'Memeriksa liveness...'; showOverlay(sessionId, 'scanning');
+                    const liveness = await window.BiometricLiveness.run({
+                        video: document.getElementById('video-' + sessionId),
+                        canvas: document.getElementById('canvas-' + sessionId),
+                        purpose: form.dataset.action,
+                        sessionId: sessionId,
+                        onStatus: function (message) { setOverlayStatus(sessionId, message); },
+                    });
+                    setStep(sessionId, 'liveness', 'complete');
+                    biometricPayload = { challengeId: liveness.challengeId, frames: liveness.frames };
+                } else {
+                    biometricPayload = { faceImage: window.BiometricLiveness.captureFrame(document.getElementById('video-' + sessionId), document.getElementById('canvas-' + sessionId)) };
                 }
-
-                lockButton();
-                setButtonText(SPINNER + 'Mengambil lokasi...');
-                showOverlay(sessionId);
-                setOverlayStatus(sessionId, '📍 Mengambil lokasi GPS...');
-                const location = await getLocation();
-
-                setButtonText(SPINNER + 'Bersiap...');
-                setOverlayStatus(sessionId, 'Bersiap memindai wajah...');
-                await countdown(sessionId, 3);
-
-                setButtonText(SPINNER + 'Mengambil foto...');
-                showOverlay(sessionId, 'scanning');
-                setOverlayStatus(sessionId, 'Mengambil foto wajah - tetap menghadap kamera');
-                const capture = captureFace(sessionId);
-
-                showOverlay(sessionId, 'success');
-                setOverlayStatus(sessionId, 'Foto berhasil diambil');
-                await new Promise(function (resolve) { setTimeout(resolve, 400); });
-
-                form.querySelector('[name="latitude"]').value = location.lat;
-                form.querySelector('[name="longitude"]').value = location.lng;
-                form.querySelector('[name="accuracy"]').value = location.accuracy ?? '';
-                form.querySelector('[name="face_image"]').value = capture.image;
-
-                setButtonText(SPINNER + 'Menyimpan...');
-                setOverlayStatus(sessionId, 'Menyimpan data absensi...');
-                form.submit();
+                setStep(sessionId, 'verify', 'active'); button.innerHTML = SPINNER + 'Memverifikasi wajah...'; setOverlayStatus(sessionId, 'Mencocokkan wajah terdaftar...');
+                await submitAttendance(form, sessionId, location, biometricPayload); showOverlay(sessionId, 'success'); setOverlayStatus(sessionId, 'Biometrik berhasil. Absensi tersimpan.'); notify('Wajah terverifikasi dan absensi telah disimpan.', 'Biometrik Terverifikasi', 'success'); window.setTimeout(function () { window.location.reload(); }, 900);
             } catch (error) {
-                const failedAttempts = currentAttempts + 1;
-                attempts.set(attemptKey, failedAttempts);
-                releaseButton();
-
-                if (sessionId) {
-                    showOverlay(sessionId, 'error');
-                    setOverlayStatus(sessionId, '✗ Verifikasi gagal');
-                    setTimeout(function () { hideOverlay(sessionId); }, 1500);
-                }
-
-                if (failedAttempts >= maxAttempts) {
-                    if (button) {
-                        button.disabled = true;
-                    }
-                    notify('Verifikasi wajah gagal ' + maxAttempts + ' kali. Hubungi admin untuk bantuan.', 'Batas Percobaan Tercapai');
-                    return;
-                }
-
-                notify(errorMessage(error) + ' Sisa percobaan: ' + (maxAttempts - failedAttempts) + '.', 'Verifikasi Wajah Gagal');
-            }
+                const countAttempt = countableFailures.has(error.code); const failedAttempts = countAttempt ? currentAttempts + 1 : currentAttempts; if (countAttempt) attempts.set(attemptKey, failedAttempts);
+                setStep(sessionId, error.stage === 'gps' ? 'gps' : 'verify', 'error'); showOverlay(sessionId, 'error'); setOverlayStatus(sessionId, error.message || 'Face match gagal.'); notify(error.message || 'Face match gagal.', 'Verifikasi Biometrik Gagal');
+                if (failedAttempts >= maxAttempts) { button.disabled = true; notify('Batas percobaan verifikasi wajah tercapai. Hubungi admin untuk bantuan.', 'Batas Percobaan Tercapai'); } else { button.disabled = false; }
+            } finally { delete button.dataset.processing; button.removeAttribute('aria-busy'); if (!button.disabled) button.innerHTML = originalText; window.setTimeout(function () { hideOverlay(sessionId); }, 1800); }
         });
     });
 
-    await startCamera();
+    if (retryButton) retryButton.addEventListener('click', checkBiometricStatus);
+    window.addEventListener('online', syncButtons);
+    window.addEventListener('offline', syncButtons);
+    await Promise.all([checkBiometricStatus(), startCamera()]);
+    syncButtons();
+    window.addEventListener('beforeunload', function () { window.BiometricLiveness.stopCamera(cameraStream); });
 });

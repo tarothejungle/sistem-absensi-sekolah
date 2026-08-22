@@ -54,7 +54,6 @@ class LeaveApprovalTest extends TestCase
         $leave->refresh();
 
         $this->assertSame('ditolak', $leave->status_pengajuan);
-        $this->assertSame('ditolak', $leave->status_infal);
         $this->assertSame($approver->id, $leave->approved_by);
         $this->assertSame('Tanggal bentrok dengan agenda sekolah.', $leave->catatan_approval);
         $this->assertNotNull($leave->approved_at);
@@ -91,13 +90,14 @@ class LeaveApprovalTest extends TestCase
 
         $leave = LeaveRequest::create([
             'teacher_id' => $requestTeacher->id,
-            'infal_teacher_id' => $infalTeacher->id,
             'jenis_pengajuan' => 'izin',
             'tanggal_mulai' => now()->toDateString(),
             'tanggal_selesai' => now()->toDateString(),
             'alasan' => 'Keperluan keluarga.',
             'status_pengajuan' => 'disetujui',
-            'status_infal' => 'pending',
+        ]);
+        $leave->infalTeachers()->sync([
+            $infalTeacher->id => ['status_infal' => 'pending'],
         ]);
 
         $response = $this
@@ -108,10 +108,10 @@ class LeaveApprovalTest extends TestCase
 
         $response->assertSessionHas('success');
 
-        $leave->refresh();
+        $pivot = $leave->infalTeachers()->where('teachers.id', $infalTeacher->id)->firstOrFail()->pivot;
 
-        $this->assertSame('ditolak', $leave->status_infal);
-        $this->assertSame('Saya sudah ada jadwal mengajar di kelas lain.', $leave->catatan_infal);
+        $this->assertSame('ditolak', $pivot->status_infal);
+        $this->assertSame('Saya sudah ada jadwal mengajar di kelas lain.', $pivot->catatan_infal);
     }
 
     public function test_infal_teacher_approval_clears_previous_note(): void
@@ -121,14 +121,14 @@ class LeaveApprovalTest extends TestCase
 
         $leave = LeaveRequest::create([
             'teacher_id' => $requestTeacher->id,
-            'infal_teacher_id' => $infalTeacher->id,
             'jenis_pengajuan' => 'izin',
             'tanggal_mulai' => now()->toDateString(),
             'tanggal_selesai' => now()->toDateString(),
             'alasan' => 'Keperluan keluarga.',
             'status_pengajuan' => 'disetujui',
-            'status_infal' => 'pending',
-            'catatan_infal' => 'Catatan lama',
+        ]);
+        $leave->infalTeachers()->sync([
+            $infalTeacher->id => ['status_infal' => 'pending', 'catatan_infal' => 'Catatan lama'],
         ]);
 
         $response = $this
@@ -137,10 +137,41 @@ class LeaveApprovalTest extends TestCase
 
         $response->assertSessionHas('success');
 
-        $leave->refresh();
+        $pivot = $leave->infalTeachers()->where('teachers.id', $infalTeacher->id)->firstOrFail()->pivot;
 
-        $this->assertSame('disetujui', $leave->status_infal);
-        $this->assertNull($leave->catatan_infal);
+        $this->assertSame('disetujui', $pivot->status_infal);
+        $this->assertNull($pivot->catatan_infal);
+    }
+
+    public function test_one_infal_approval_does_not_change_other_infal_status(): void
+    {
+        [$requestTeacher] = $this->createTeacherUser('guru');
+        [$infalB, $userB] = $this->createTeacherUser('guru');
+        [$infalC] = $this->createTeacherUser('guru');
+
+        $leave = LeaveRequest::create([
+            'teacher_id' => $requestTeacher->id,
+            'jenis_pengajuan' => 'izin',
+            'tanggal_mulai' => now()->toDateString(),
+            'tanggal_selesai' => now()->toDateString(),
+            'alasan' => 'Keperluan keluarga.',
+            'status_pengajuan' => 'disetujui',
+        ]);
+        $leave->infalTeachers()->sync([
+            $infalB->id => ['status_infal' => 'pending'],
+            $infalC->id => ['status_infal' => 'pending'],
+        ]);
+
+        $this->actingAs($userB)
+            ->patch(route('leave.infal.approve', $leave))
+            ->assertSessionHas('success');
+
+        $pivotB = $leave->infalTeachers()->where('teachers.id', $infalB->id)->firstOrFail()->pivot;
+        $pivotC = $leave->infalTeachers()->where('teachers.id', $infalC->id)->firstOrFail()->pivot;
+
+        // Hanya milik B yang berubah; C tetap pending.
+        $this->assertSame('disetujui', $pivotB->status_infal);
+        $this->assertSame('pending', $pivotC->status_infal);
     }
 
     private function createPendingLeave(Teacher $teacher): LeaveRequest
@@ -152,7 +183,6 @@ class LeaveApprovalTest extends TestCase
             'tanggal_selesai' => now()->toDateString(),
             'alasan' => 'Keperluan keluarga.',
             'status_pengajuan' => 'pending',
-            'status_infal' => 'disetujui',
         ]);
     }
 
@@ -172,7 +202,7 @@ class LeaveApprovalTest extends TestCase
     private function createUser(string $role): User
     {
         $user = User::create([
-            'nip' => uniqid('nip_', true),
+            'username' => uniqid('user_', true),
             'name' => 'User Test ' . uniqid(),
             'email' => uniqid('user_', true) . '@example.test',
             'password' => Hash::make('password'),

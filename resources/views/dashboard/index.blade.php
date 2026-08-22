@@ -15,11 +15,11 @@
 @endphp
 <div class="container-fluid">
 
-    @if(in_array($role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan']))
+    @if(auth()->user()->hasAttendanceAccess())
         @php
             $user = auth()->user();
-            $namaGuru = $teacher->nama_lengkap ?? $user->name ?? $user->nip;
-            $profilePhoto = $user->profile_photo ? asset($user->profile_photo) : null;
+            $namaGuru = $teacher->nama_lengkap ?? $user->name ?? $user->username;
+            $profilePhoto = $user->profile_photo ? route('profile.photo.show', $user) : null;
             $initials = collect(explode(' ', $namaGuru))
                 ->filter()
                 ->take(2)
@@ -45,7 +45,11 @@
                 <div class="dashboard-summary-title">Aktivitas Hari Ini</div>
                 <div class="dashboard-summary-row">
                     <span>Profil</span>
-                    <strong>{{ $teacher?->nama_lengkap ? 'Lengkap' : 'Perlu dicek' }}</strong>
+                    @if($profileCompleteness['is_complete'] ?? false)
+                        <strong class="text-success">Lengkap</strong>
+                    @else
+                        <strong class="text-warning">Belum Lengkap</strong>
+                    @endif
                 </div>
                 @if(auth()->user()->role === 'kepala_sekolah')
                     <div class="dashboard-summary-row">
@@ -55,6 +59,34 @@
                 @endif
             </div>
         </div>
+
+        @if(!($profileCompleteness['is_complete'] ?? true) && !empty($profileCompleteness['missing']))
+            @php
+                $userMissing = collect($profileCompleteness['missing'])
+                    ->where('editable_by_user', true)
+                    ->pluck('label')
+                    ->all();
+                $adminMissing = collect($profileCompleteness['missing'])
+                    ->where('editable_by_user', false)
+                    ->pluck('label')
+                    ->all();
+            @endphp
+            <div class="dashboard-profile-alert d-flex align-items-start gap-3 mt-3 mb-3" role="alert">
+                <i class="bi bi-exclamation-triangle-fill fs-4 dashboard-profile-alert-icon"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-bold mb-1">Profil Anda belum lengkap</div>
+                    @if($userMissing)
+                        <div>Data yang dapat Anda lengkapi: <strong>{{ implode(', ', $userMissing) }}.</strong></div>
+                        <div class="small mt-1">Gunakan tombol <strong>Ubah Profil</strong> pada kartu profil.</div>
+                    @endif
+                    @if($adminMissing)
+                        <div class="small {{ $userMissing ? 'mt-2 pt-2 border-top' : 'mt-1' }}">
+                            Data yang perlu diatur admin: {{ implode(', ', $adminMissing) }}.
+                        </div>
+                    @endif
+                </div>
+            </div>
+        @endif
 
         <div class="row g-4">
             <div class="col-lg-4">
@@ -112,7 +144,7 @@
 
                         <div class="info-list-modern">
                             <div class="info-row"><div class="info-label">Nama Lengkap</div><div class="info-value">{{ $teacher->nama_lengkap ?? '-' }}</div></div>
-                            <div class="info-row"><div class="info-label">Username</div><div class="info-value">{{ $user->nip ?? '-' }}</div></div>
+                            <div class="info-row"><div class="info-label">Username</div><div class="info-value">{{ $user->username ?? '-' }}</div></div>
                             <div class="info-row"><div class="info-label">Tempat, Tanggal Lahir</div><div class="info-value">
                                 @if($user->tempat_lahir || $user->tanggal_lahir)
                                     {{ $user->tempat_lahir ?? '-' }}
@@ -130,12 +162,24 @@
                                 <div class="info-label">Sesi Absensi</div>
                                 <div class="info-value">
                                     @if($teacher && $teacher->attendanceSessions && $teacher->attendanceSessions->count() > 0)
-                                        <div class="d-flex flex-wrap gap-2">
+                                        <div class="d-flex flex-column gap-3">
                                             @foreach($teacher->attendanceSessions as $session)
-                                                <span class="badge bg-primary">
-                                                    {{ $session->nama_sesi }}
-                                                    <span class="ms-1 fw-normal">{{ substr($session->jam_masuk, 0, 5) }} - {{ substr($session->jam_pulang, 0, 5) }}</span>
-                                                </span>
+                                                @php
+                                                    $window = $sessionWindows[$session->id] ?? null;
+                                                @endphp
+                                                <div class="profile-session-panel">
+                                                    <div class="fw-bold mb-2" style="color: var(--ref-blue-strong);">
+                                                        <i class="bi bi-clock-history me-1"></i> {{ $session->nama_sesi }}
+                                                    </div>
+                                                    <div class="d-grid gap-1 small">
+                                                        <div><span class="text-muted">Jadwal kerja:</span> <span class="fw-semibold">{{ substr($session->jam_masuk, 0, 5) }} - {{ substr($session->jam_pulang, 0, 5) }}</span></div>
+                                                        <div><span class="text-muted">Check-in tersedia:</span> <span class="fw-semibold">{{ substr($session->batas_check_in_mulai, 0, 5) }} - {{ substr($session->batas_check_in_selesai, 0, 5) }}</span></div>
+                                                        @if($window)
+                                                            <div><span class="text-muted">Batas hadir tepat waktu:</span> <span class="fw-semibold text-success">{{ $window['batas_tepat_waktu']->format('H:i') }}</span> <span class="text-muted">({{ $window['toleransi_menit'] }} menit)</span></div>
+                                                        @endif
+                                                        <div><span class="text-muted">Check-out tersedia:</span> <span class="fw-semibold">{{ substr($session->batas_check_out_mulai, 0, 5) }} - {{ substr($session->batas_check_out_selesai, 0, 5) }}</span></div>
+                                                    </div>
+                                                </div>
                                             @endforeach
                                         </div>
                                     @else
@@ -176,7 +220,7 @@
                                 @forelse($rekapHariIni ?? [] as $attendance)
                                     <tr>
                                         <td>{{ $attendance->teacher->nama_lengkap ?? '-' }}</td>
-                                        <td>{{ $attendance->teacher->user->nip ?? '-' }}</td>
+                                        <td>{{ $attendance->teacher->user->username ?? '-' }}</td>
                                         <td>{{ $attendance->check_in_time ? \Carbon\Carbon::parse($attendance->check_in_time)->format('H:i') : '-' }}</td>
                                         <td>{{ $attendance->check_out_time ? \Carbon\Carbon::parse($attendance->check_out_time)->format('H:i') : '-' }}</td>
                                         <td>
@@ -264,7 +308,7 @@
                                 @foreach($rekapHariIni as $item)
                                     <tr>
                                         <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
-                                        <td>{{ $item->teacher->user->nip ?? '-' }}</td>
+                                        <td>{{ $item->teacher->user->username ?? '-' }}</td>
                                         <td>{{ $item->check_in_time ? \Carbon\Carbon::parse($item->check_in_time)->format('H:i') : '-' }}</td>
                                         <td>{{ $item->check_out_time ? \Carbon\Carbon::parse($item->check_out_time)->format('H:i') : '-' }}</td>
                                         <td>
@@ -311,17 +355,18 @@
                                 <tr>
                                     <td>{{ $activity->name ?? '-' }}</td>
                                     <td>
-                                        @if($activity->role === 'super_admin')
-                                            <span class="badge bg-dark">Super Admin</span>
-                                        @elseif($activity->role === 'kepala_sekolah')
-                                            <span class="badge bg-success">Kepala Sekolah</span>
-                                        @elseif($activity->role === 'guru')
-                                            <span class="badge bg-primary">Guru</span>
-                                        @elseif($activity->role === 'bendahara')
-                                            <span class="badge bg-primary">Bendahara</span>
-                                        @else
-                                            <span class="badge bg-secondary">{{ $activity->role ?? '-' }}</span>
-                                        @endif
+                                        @php
+                                            $activityRoleClass = match ($activity->role) {
+                                                'super_admin' => 'bg-primary',
+                                                'kepala_sekolah' => 'bg-primary',
+                                                'guru', 'bendahara' => 'bg-secondary',
+                                                'tenaga_kependidikan' => 'bg-secondary',
+                                                default => 'bg-secondary',
+                                            };
+                                        @endphp
+                                        <span class="badge {{ $activityRoleClass }}">
+                                            {{ \App\Models\Teacher::dataGuruRoleLabel($activity->role) }}
+                                        </span>
                                     </td>
                                     <td>{{ $activity->activity ?? 'login kedalam aplikasi' }}</td>
                                     <td><strong>{{ $activity->created_at->diffForHumans() }}</strong><br><small class="text-muted">{{ $activity->created_at->format('d/m/Y H:i') }}</small></td>

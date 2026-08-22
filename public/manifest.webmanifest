@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Sistem Absensi Guru MI Lantaburo",
+  "short_name": "Absensi MI",
+  "description": "Sistem absensi, izin, laporan, dan payroll MI Lantaburo.",
+  "lang": "id-ID",
+  "dir": "ltr",
+  "start_url": "/login",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#1f4f46",
+  "icons": [
+    {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "Dashboard", "short_name": "Dashboard", "url": "/dashboard", "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]},
+    {"name": "Absensi", "short_name": "Absensi", "url": "/attendance", "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]}
+  ]
+}

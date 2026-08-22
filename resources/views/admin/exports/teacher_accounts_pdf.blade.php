@@ -70,7 +70,7 @@
         <tbody>
             @foreach($teachers as $teacher)
                 <tr>
-                    <td>{{ $teacher->user->nip ?? '-' }}</td>
+                    <td>{{ $teacher->user->username ?? '-' }}</td>
                     <td>{{ $teacher->nama_lengkap ?? '-' }}</td>
                     <td>{{ \App\Models\Teacher::dataGuruRoleLabel($teacher->user->role ?? null) }}</td>
                     <td>{{ $teacher->user->email ?? '-' }}</td>

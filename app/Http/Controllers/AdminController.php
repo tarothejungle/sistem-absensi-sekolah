@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Exports\TeacherAccountsExport;
-use App\Models\AttendanceSession;
 use App\Models\SchoolLocation;
 use App\Models\Teacher;
 use App\Models\User;
-use App\Models\WorkSchedule;
+use App\Services\TeacherLifecycleService;
+use App\Support\PasswordPolicy;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,8 +18,6 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class AdminController extends Controller
 {
-    private array $days = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
-
     public function teachers(Request $request)
     {
         $keyword = $request->keyword;
@@ -42,22 +40,14 @@ class AdminController extends Controller
     {
         $teacher = null;
 
-        $sessions = AttendanceSession::where('status', 'aktif')
-            ->orderBy('jam_masuk')
-            ->get();
-
-        return view('admin.teacher_form', compact('teacher', 'sessions'));
+        return view('admin.teacher_form', compact('teacher'));
     }
 
     public function storeTeacher(Request $request)
     {
         $data = $request->validate([
-            'nip' => ['required', 'string', 'max:30', 'unique:users,nip'],
+            'username' => ['required', 'string', 'max:30', 'unique:users,username'],
             'role' => ['required', Rule::in(Teacher::DATA_GURU_ROLES)],
-            'attendance_session_ids' => 'required|array',
-            'attendance_session_ids.*' => 'exists:attendance_sessions,id',
-            'attendance_days' => 'required|array|min:1',
-            'attendance_days.*' => 'in:'.implode(',', $this->days),
             'password' => ['required', 'string', $this->strongPasswordRule()],
             'nama_lengkap' => 'required|string|max:100',
             'jenis_kelamin' => 'required|in:L,P',
@@ -74,9 +64,9 @@ class AdminController extends Controller
             'mata_pelajaran' => 'nullable|string|max:100',
         ]);
 
-        DB::transaction(function () use ($data): void {
+        $teacher = DB::transaction(function () use ($data): Teacher {
             $user = new User([
-                'nip' => $data['nip'],
+                'username' => $data['username'],
                 'name' => $data['nama_lengkap'],
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
@@ -85,7 +75,7 @@ class AdminController extends Controller
             $user->status = 'aktif';
             $user->save();
 
-            $teacher = Teacher::create([
+            return Teacher::create([
                 'user_id' => $user->id,
                 'nama_lengkap' => $data['nama_lengkap'],
                 'jenis_kelamin' => $data['jenis_kelamin'],
@@ -94,26 +84,20 @@ class AdminController extends Controller
                 'mata_pelajaran' => $data['mata_pelajaran'] ?? null,
             ]);
 
-            $teacher->attendanceSessions()->sync($data['attendance_session_ids']);
-            $this->syncTeacherWorkSchedules($teacher, $data['attendance_days']);
         });
 
         return redirect()
-            ->route('admin.teachers', $request->only(['page', 'keyword']))
-            ->with('success', 'Data guru berhasil ditambahkan.');
+            ->route('admin.work-schedules.index', ['teacher_id' => $teacher->id])
+            ->with('success', 'Data guru berhasil ditambahkan. Atur jadwal kerja agar akun dapat melakukan absensi.');
     }
 
     public function editTeacher(Teacher $teacher)
     {
         abort_unless(in_array($teacher->user?->role, Teacher::DATA_GURU_ROLES, true), 404);
 
-        $teacher->load(['attendanceSessions', 'schedules', 'faceEnrollment']);
+        $teacher->load('faceEnrollment');
 
-        $sessions = AttendanceSession::where('status', 'aktif')
-            ->orderBy('jam_masuk')
-            ->get();
-
-        return view('admin.teacher_form', compact('teacher', 'sessions'));
+        return view('admin.teacher_form', compact('teacher'));
     }
 
     public function updateTeacher(Request $request, Teacher $teacher)
@@ -121,12 +105,8 @@ class AdminController extends Controller
         abort_unless(in_array($teacher->user?->role, Teacher::DATA_GURU_ROLES, true), 404);
 
         $data = $request->validate([
-            'nip' => 'required|string|max:30|unique:users,nip,'.$teacher->user_id,
+            'username' => 'required|string|max:30|unique:users,username,'.$teacher->user_id,
             'role' => ['required', Rule::in(Teacher::DATA_GURU_ROLES)],
-            'attendance_session_ids' => 'required|array',
-            'attendance_session_ids.*' => 'exists:attendance_sessions,id',
-            'attendance_days' => 'required|array|min:1',
-            'attendance_days.*' => 'in:'.implode(',', $this->days),
             'nama_lengkap' => 'required|string|max:100',
             'jenis_kelamin' => 'required|in:L,P',
             'no_hp' => 'nullable|string|max:20',
@@ -144,7 +124,7 @@ class AdminController extends Controller
 
         DB::transaction(function () use ($data, $teacher): void {
             $teacher->user->update([
-                'nip' => $data['nip'],
+                'username' => $data['username'],
                 'name' => $data['nama_lengkap'],
                 'email' => $data['email'],
             ]);
@@ -159,8 +139,6 @@ class AdminController extends Controller
                 'mata_pelajaran' => $data['mata_pelajaran'] ?? null,
             ]);
 
-            $teacher->attendanceSessions()->sync($data['attendance_session_ids']);
-            $this->syncTeacherWorkSchedules($teacher, $data['attendance_days']);
         });
 
         return redirect()
@@ -179,65 +157,43 @@ class AdminController extends Controller
             ->with('success', 'Data wajah '.$teacher->nama_lengkap.' berhasil dihapus.');
     }
 
-    private function syncTeacherWorkSchedules(Teacher $teacher, array $days): void
-    {
-        $days = collect($days)
-            ->filter(fn ($day) => in_array($day, $this->days, true))
-            ->unique()
-            ->values();
-
-        WorkSchedule::where('teacher_id', $teacher->id)
-            ->whereNotIn('hari', $days->all())
-            ->update(['status' => 'nonaktif']);
-
-        foreach ($days as $hari) {
-            WorkSchedule::updateOrCreate(
-                [
-                    'teacher_id' => $teacher->id,
-                    'hari' => $hari,
-                ],
-                [
-                    'jam_masuk' => '07:00:00',
-                    'jam_pulang' => '12:00:00',
-                    'toleransi_terlambat' => 15,
-                    'status' => 'aktif',
-                ]
-            );
-        }
-    }
-
-    public function bulkDeleteTeachers(Request $request)
+    public function bulkDeleteTeachers(Request $request, TeacherLifecycleService $lifecycle)
     {
         $data = $request->validate([
             'teacher_ids' => 'required|array|min:1',
-            'teacher_ids.*' => 'exists:teachers,id',
+            'teacher_ids.*' => 'integer|distinct|exists:teachers,id',
         ]);
 
         $teachers = Teacher::with('user')
             ->whereIn('id', $data['teacher_ids'])
+            ->whereHas('user', fn ($query) => $query->whereIn('role', Teacher::DATA_GURU_ROLES))
             ->get();
 
-        if ($teachers->isEmpty()) {
-            return back()->with('error', 'Pilih data guru yang ingin dihapus.');
+        if ($teachers->count() !== count($data['teacher_ids'])) {
+            return back()->with('error', 'Hanya akun guru/PTK yang dapat diarsipkan.');
         }
 
-        $userIds = $teachers
-            ->pluck('user_id')
-            ->filter()
-            ->all();
+        $archived = 0;
+        $deleted = 0;
 
-        User::whereIn('id', $userIds)->delete();
+        foreach ($teachers as $teacher) {
+            $result = $lifecycle->archiveOrDeleteTeacher($teacher);
+            $result['action'] === 'archived' ? $archived++ : $deleted++;
+        }
 
-        return back()->with('success', 'Data guru terpilih berhasil dihapus.');
+        return back()->with('success', "{$archived} akun diarsipkan dan {$deleted} akun tanpa histori dihapus.");
     }
 
-    public function deleteTeacher(Teacher $teacher)
+    public function deleteTeacher(Teacher $teacher, TeacherLifecycleService $lifecycle)
     {
         abort_unless(in_array($teacher->user?->role, Teacher::DATA_GURU_ROLES, true), 404);
 
-        $teacher->user->delete();
+        $result = $lifecycle->archiveOrDeleteTeacher($teacher);
+        $message = $result['action'] === 'archived'
+            ? 'Data guru diarsipkan agar seluruh histori tetap tersimpan.'
+            : 'Data guru tanpa histori berhasil dihapus.';
 
-        return back()->with('success', 'Data guru dihapus.');
+        return back()->with('success', $message);
     }
 
     public function editLocation()
@@ -287,14 +243,14 @@ class AdminController extends Controller
     public function storeUser(Request $request)
     {
         $request->validate([
-            'nip' => 'required|string|max:30|unique:users,nip',
+            'username' => 'required|string|max:30|unique:users,username',
             'name' => 'required|string|max:100',
             'email' => 'required|email|unique:users,email',
             'password' => ['required', 'string', $this->strongPasswordRule()],
         ]);
 
         $user = new User([
-            'nip' => $request->nip,
+            'username' => $request->username,
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
@@ -321,14 +277,14 @@ class AdminController extends Controller
         abort_unless($user->role === 'super_admin', 404);
 
         $request->validate([
-            'nip' => 'required|string|max:30|unique:users,nip,'.$user->id,
+            'username' => 'required|string|max:30|unique:users,username,'.$user->id,
             'name' => 'required|string|max:100',
             'email' => 'required|email|unique:users,email,'.$user->id,
             'password' => ['nullable', 'string', $this->strongPasswordRule()],
         ]);
 
         $data = [
-            'nip' => $request->nip,
+            'username' => $request->username,
             'name' => $request->name,
             'email' => $request->email,
         ];
@@ -344,7 +300,7 @@ class AdminController extends Controller
             ->with('success', 'Data admin berhasil diperbarui.');
     }
 
-    public function bulkDeleteUsers(Request $request)
+    public function bulkDeleteUsers(Request $request, TeacherLifecycleService $lifecycle)
     {
         $data = $request->validate([
             'user_ids' => 'required|array|min:1',
@@ -360,12 +316,19 @@ class AdminController extends Controller
             return back()->with('error', 'Akun yang sedang digunakan tidak boleh dihapus.');
         }
 
-        User::where('role', 'super_admin')->whereIn('id', $userIds)->delete();
+        $users = User::where('role', 'super_admin')->whereIn('id', $userIds)->get();
+        $archived = 0;
+        $deleted = 0;
 
-        return back()->with('success', 'Data admin terpilih berhasil dihapus.');
+        foreach ($users as $user) {
+            $result = $lifecycle->archiveOrDeleteUser($user);
+            $result['action'] === 'archived' ? $archived++ : $deleted++;
+        }
+
+        return back()->with('success', "{$archived} akun admin diarsipkan dan {$deleted} akun tanpa histori dihapus.");
     }
 
-    public function deleteUser(User $user)
+    public function deleteUser(User $user, TeacherLifecycleService $lifecycle)
     {
         abort_unless($user->role === 'super_admin', 404);
 
@@ -373,9 +336,12 @@ class AdminController extends Controller
             return back()->with('error', 'Akun yang sedang digunakan tidak boleh dihapus.');
         }
 
-        $user->delete();
+        $result = $lifecycle->archiveOrDeleteUser($user);
+        $message = $result['action'] === 'archived'
+            ? 'Akun admin diarsipkan agar histori tetap tersimpan.'
+            : 'Data admin tanpa histori berhasil dihapus.';
 
-        return back()->with('success', 'Data admin berhasil dihapus.');
+        return back()->with('success', $message);
     }
 
     public function toggleUserStatus(User $user)
@@ -429,6 +395,6 @@ class AdminController extends Controller
 
     private function strongPasswordRule(): Password
     {
-        return Password::min(8)->mixedCase()->letters()->numbers()->symbols();
+        return PasswordPolicy::rule();
     }
 }

@@ -2,9 +2,7 @@
 
 namespace App\Http;
 
-use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
-use Illuminate\Routing\Router;
 
 class Kernel extends HttpKernel
 {
@@ -23,19 +21,11 @@ class Kernel extends HttpKernel
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+        // Header keamanan wajib menjadi lapisan terluar. Didaftarkan langsung,
+        // bukan lewat class_exists, agar berkas yang hilang gagal keras alih-alih
+        // mematikan seluruh header keamanan tanpa error.
+        \App\Http\Middleware\SecurityHeaders::class,
     ];
-
-    public function __construct(Application $app, Router $router)
-    {
-        parent::__construct($app, $router);
-
-        // Middleware header keamanan bersifat opsional: berkasnya (App\Http\Middleware\SecurityHeaders)
-        // sengaja tidak disertakan di repository publik. Bila tersedia, otomatis diaktifkan
-        // sebagai lapisan terluar global stack — silakan implementasikan sendiri bila mengembangkan.
-        if (class_exists(\App\Http\Middleware\SecurityHeaders::class)) {
-            $this->middleware[] = \App\Http\Middleware\SecurityHeaders::class;
-        }
-    }
 
     /**
      * The application's route middleware groups.
@@ -80,5 +70,7 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
         'active' => \App\Http\Middleware\EnsureUserIsActive::class,
+        'session.idle' => \App\Http\Middleware\EnsureSessionIsActive::class,
+        'aio.api_key' => \App\Http\Middleware\AioApiKeyMiddleware::class,
     ];
 }

@@ -77,10 +77,10 @@
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td>
-                        {{ $item->tanggalLabel() }}
+                        {{ $item->tanggal_label }}
                     </td>
-                    <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
-                    <td>{{ $item->infalTeacher->nama_lengkap ?? '-' }}</td>
+                    <td>{{ $item->guru_utama ?? '-' }}</td>
+                    <td>{{ $item->guru_infal ?? '-' }}</td>
                     <td>{{ ucfirst($item->jenis_pengajuan) }}</td>
                     <td>{{ $item->alasan }}</td>
                     <td>Disetujui</td>

@@ -1,28 +1,32 @@
-<?php
+﻿<?php
 
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\AttendanceController;
+use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AttendanceSessionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DutyScheduleController;
-use App\Http\Controllers\HolidaySettingController;
-use App\Http\Controllers\InfalReportController;
+use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\BiometricLivenessController;
 use App\Http\Controllers\LeaveRequestController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PasswordResetController;
-use App\Http\Controllers\PayrollController;
-use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ReportController;
-use Illuminate\Support\Facades\Route;
+use App\Models\User;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\InfalReportController;
+use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PushSubscriptionController;
+use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\HolidaySettingController;
+use App\Http\Controllers\DutyScheduleController;
+use App\Http\Controllers\WorkScheduleController;
 
 Route::get('/', fn () => redirect()->route('login'));
 
 Route::get('/login', [AuthController::class, 'showLogin'])->middleware('guest')->name('login');
 Route::post('/login', [AuthController::class, 'login'])
-    ->middleware('throttle:5,1')
+    ->middleware(['guest', 'throttle:5,1'])
     ->name('login.process');
-Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])
     ->name('password.request');
@@ -38,18 +42,37 @@ Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']
     ->middleware('throttle:5,1')
     ->name('password.update');
 
-Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::get('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
-    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.readAll');
+Route::middleware(['auth', 'session.idle'])->group(function () {
+    Route::post('/session/heartbeat', [AuthController::class, 'heartbeat'])
+        ->name('session.heartbeat');
 
-    Route::middleware(['active', 'role:guru,bendahara,kepala_sekolah,tenaga_kependidikan'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('active')->name('dashboard');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])
+        ->middleware('active')
+        ->name('notifications.read');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])
+        ->middleware('active')
+        ->name('notifications.readAll');
+
+    Route::prefix('pwa/push')->middleware(['active', 'throttle:pwa-push'])->group(function () {
+        Route::get('/public-key', [PushSubscriptionController::class, 'publicKey'])->name('pwa.push.public-key');
+        Route::post('/subscribe', [PushSubscriptionController::class, 'store'])->name('pwa.push.subscribe');
+        Route::delete('/subscribe', [PushSubscriptionController::class, 'destroy'])->name('pwa.push.unsubscribe');
+    });
+
+    Route::middleware(['active', 'role:' . implode(',', User::ATTENDANCE_ROLES)])->group(function () {
         Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+        Route::get('/biometric/status', [AttendanceController::class, 'biometricStatus'])
+            ->middleware('throttle:biometric-status')
+            ->name('biometric.status');
+        Route::post('/biometric/liveness/challenges', [BiometricLivenessController::class, 'store'])
+            ->middleware('throttle:liveness-challenge')
+            ->name('biometric.liveness.challenges.store');
         Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])
-            ->middleware('throttle:10,1')
+            ->middleware('throttle:attendance-check-in')
             ->name('attendance.checkin');
         Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])
-            ->middleware('throttle:10,1')
+            ->middleware('throttle:attendance-check-out')
             ->name('attendance.checkout');
     });
     Route::get('/attendance/photos/{attendance}/{type}', [AttendanceController::class, 'photo'])
@@ -57,37 +80,43 @@ Route::middleware('auth')->group(function () {
         ->whereIn('type', ['check-in', 'check-out'])
         ->name('attendance.photo.show');
 
-    Route::get('/leave', [LeaveRequestController::class, 'index'])->name('leave.index');
-    Route::get('/leave/create', [LeaveRequestController::class, 'create'])->name('leave.create');
-    Route::post('/leave', [LeaveRequestController::class, 'store'])->name('leave.store');
-    Route::post('/leave/{leave}/approve', [LeaveRequestController::class, 'approve'])->name('leave.approve');
-    Route::post('/leave/{leave}/reject', [LeaveRequestController::class, 'reject'])->name('leave.reject');
+    Route::middleware('active')->group(function () {
+        Route::get('/leave', [LeaveRequestController::class, 'index'])->name('leave.index');
+        Route::get('/leave/create', [LeaveRequestController::class, 'create'])->name('leave.create');
+        Route::post('/leave', [LeaveRequestController::class, 'store'])->name('leave.store');
+        Route::post('/leave/{leave}/approve', [LeaveRequestController::class, 'approve'])->name('leave.approve');
+        Route::post('/leave/{leave}/reject', [LeaveRequestController::class, 'reject'])->name('leave.reject');
 
-    Route::get('/leave/{leave}/attachment', [LeaveRequestController::class, 'showAttachment'])->name('leave.attachment.show');
+        Route::get('/leave/{leave}/attachment', [LeaveRequestController::class, 'showAttachment'])->name('leave.attachment.show');
 
-    Route::get('/leave/{leave}/edit', [LeaveRequestController::class, 'edit'])->name('leave.edit');
-    Route::put('/leave/{leave}', [LeaveRequestController::class, 'update'])->name('leave.update');
-    Route::delete('/leave/{leave}', [LeaveRequestController::class, 'destroy'])->name('leave.destroy');
+        Route::get('/leave/{leave}/edit', [LeaveRequestController::class, 'edit'])->name('leave.edit');
+        Route::put('/leave/{leave}', [LeaveRequestController::class, 'update'])->name('leave.update');
+        Route::delete('/leave/{leave}', [LeaveRequestController::class, 'destroy'])->name('leave.destroy');
 
-    Route::patch('/leave/{leave}/infal/approve', [LeaveRequestController::class, 'approveInfal'])->name('leave.infal.approve');
-    Route::patch('/leave/{leave}/infal/reject', [LeaveRequestController::class, 'rejectInfal'])->name('leave.infal.reject');
+        Route::patch('/leave/{leave}/infal/approve', [LeaveRequestController::class, 'approveInfal'])->name('leave.infal.approve');
+        Route::patch('/leave/{leave}/infal/reject', [LeaveRequestController::class, 'rejectInfal'])->name('leave.infal.reject');
 
-    Route::get('/infal-report', [InfalReportController::class, 'index'])->name('infal.report.index');
-    Route::get('/infal-report/pdf', [InfalReportController::class, 'pdf'])->name('infal.report.pdf');
-    Route::get('/infal-report/excel', [InfalReportController::class, 'excel'])->name('infal.report.excel');
+        Route::get('/infal-report', [InfalReportController::class, 'index'])->name('infal.report.index');
+        Route::get('/infal-report/pdf', [InfalReportController::class, 'pdf'])->name('infal.report.pdf');
+        Route::get('/infal-report/excel', [InfalReportController::class, 'excel'])->name('infal.report.excel');
 
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::post('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
-    Route::post('/profile/face-enrollment', [ProfileController::class, 'storeFaceEnrollment'])
-        ->middleware('throttle:5,1')
-        ->name('profile.face-enrollment.store');
+        Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+        Route::get('/profile/photo/{user}', [ProfileController::class, 'photo'])
+            ->whereNumber('user')
+            ->name('profile.photo.show');
+        Route::post('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
 
-    Route::get('/profile/password', [ProfileController::class, 'password'])->name('profile.password.form');
-    Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+        Route::post('/profile/face-enrollment', [ProfileController::class, 'storeFaceEnrollment'])
+            ->middleware('throttle:face-enrollment')
+            ->name('profile.face-enrollment.store');
 
-    Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto'])->name('profile.photo.delete');
+        Route::get('/profile/password', [ProfileController::class, 'password'])->name('profile.password.form');
+        Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
 
-    Route::middleware('role:super_admin')->group(function () {
+        Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto'])->name('profile.photo.delete');
+    });
+
+    Route::middleware(['active', 'role:super_admin'])->group(function () {
         Route::get('/admin/teachers', [AdminController::class, 'teachers'])->name('admin.teachers');
         Route::get('/admin/teachers/create', [AdminController::class, 'createTeacher'])->name('admin.teachers.create');
         Route::post('/admin/teachers', [AdminController::class, 'storeTeacher'])->name('admin.teachers.store');
@@ -157,11 +186,19 @@ Route::middleware('auth')->group(function () {
             ->name('admin.duty-schedules.toggle');
         Route::delete('/admin/duty-schedules/{dutySchedule}', [DutyScheduleController::class, 'destroy'])
             ->name('admin.duty-schedules.destroy');
+
+        Route::get('/admin/work-schedules', [WorkScheduleController::class, 'index'])
+            ->name('admin.work-schedules.index');
+        Route::put('/admin/work-schedules/{teacher}', [WorkScheduleController::class, 'update'])
+            ->name('admin.work-schedules.update');
     });
 
-    Route::middleware('role:bendahara,super_admin')->group(function () {
+
+    Route::middleware(['active', 'role:bendahara,super_admin'])->group(function () {
         Route::get('/payroll', [PayrollController::class, 'index'])->name('payroll.index');
         Route::post('/payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
+        Route::post('/payroll/{period}/finalize', [PayrollController::class, 'finalize'])->name('payroll.finalize');
+        Route::post('/payroll/{period}/reopen', [PayrollController::class, 'reopen'])->name('payroll.reopen');
         Route::get('/payroll/settings', [PayrollController::class, 'settings'])->name('payroll.settings');
         Route::post('/payroll/settings/bulk-update', [PayrollController::class, 'bulkUpdateSettings'])->name('payroll.settings.bulk-update');
         Route::post('/payroll/settings/{teacher}', [PayrollController::class, 'updateSetting'])->name('payroll.settings.update');
@@ -170,10 +207,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/payroll/{period}/slip/{item}', [PayrollController::class, 'slip'])->name('payroll.slip');
     });
 
-    Route::middleware('role:kepala_sekolah,super_admin')->group(function () {
+    Route::middleware(['active', 'role:kepala_sekolah,super_admin'])->group(function () {
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('/reports/export/excel', [ReportController::class, 'exportExcel'])->name('reports.export.excel');
         Route::get('/reports/export/pdf', [ReportController::class, 'exportPdf'])->name('reports.export.pdf');
+        Route::get('/reports/stream/pdf', [ReportController::class, 'streamPdf'])->name('reports.stream.pdf');
         Route::get('/reports/download/pdf', [ReportController::class, 'downloadPdf'])->name('reports.download.pdf');
     });
 });

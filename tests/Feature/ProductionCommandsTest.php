@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Attendance;
+use App\Models\BiometricLivenessChallenge;
 use App\Models\LoginActivity;
 use App\Models\Teacher;
 use App\Models\User;
@@ -26,7 +27,7 @@ class ProductionCommandsTest extends TestCase
     public function test_interactive_command_creates_super_admin_with_teacher_profile(): void
     {
         $this->artisan('admin:create-super')
-            ->expectsQuestion('NIP super admin', 'ADMIN-PRODUCTION-TEST')
+            ->expectsQuestion('Username super admin', 'ADMIN-PRODUCTION-TEST')
             ->expectsQuestion('Nama lengkap', 'Admin Produksi Test')
             ->expectsQuestion('Email (opsional)', 'admin-production@example.com')
             ->expectsQuestion('Password', 'Strong!Password123')
@@ -34,7 +35,7 @@ class ProductionCommandsTest extends TestCase
             ->expectsOutput('Super admin berhasil dibuat.')
             ->assertSuccessful();
 
-        $user = User::where('nip', 'ADMIN-PRODUCTION-TEST')->firstOrFail();
+        $user = User::where('username', 'ADMIN-PRODUCTION-TEST')->firstOrFail();
         $this->assertSame('super_admin', $user->role);
         $this->assertSame('aktif', $user->status);
         $this->assertTrue(Hash::check('Strong!Password123', $user->password));
@@ -72,7 +73,7 @@ class ProductionCommandsTest extends TestCase
             'check_in_face_photo' => 'leave_attachments/keep.pdf',
         ]);
 
-        $this->artisan('attendance:prune-face-photos', ['--days' => 30])
+        $this->artisan('attendance:prune-photos', ['--days' => 30])
             ->assertSuccessful();
 
         Storage::disk('local')->assertMissing('attendance_faces/expired-in.jpg');
@@ -105,10 +106,51 @@ class ProductionCommandsTest extends TestCase
         $this->assertDatabaseHas('login_activities', ['id' => $current->id]);
     }
 
-    private function createTeacher(string $nip): Teacher
+    public function test_liveness_pruning_expires_pending_and_removes_old_audits(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-17 12:00:00', 'Asia/Jakarta'));
+        $teacher = $this->createTeacher('LIVENESS-RETENTION');
+        $user = $teacher->user;
+
+        $pending = BiometricLivenessChallenge::create([
+            'user_id' => $user->id,
+            'teacher_id' => $teacher->id,
+            'purpose' => BiometricLivenessChallenge::PURPOSE_ENROLLMENT,
+            'action_sequence' => ['center', 'turn_left', 'turn_right', 'center'],
+            'method' => 'active_head_pose_v1',
+            'status' => BiometricLivenessChallenge::STATUS_PENDING,
+            'expires_at' => now()->subMinute(),
+        ]);
+        $old = BiometricLivenessChallenge::create([
+            'user_id' => $user->id,
+            'teacher_id' => $teacher->id,
+            'purpose' => BiometricLivenessChallenge::PURPOSE_ENROLLMENT,
+            'action_sequence' => ['center', 'turn_left', 'turn_right', 'center'],
+            'method' => 'active_head_pose_v1',
+            'status' => BiometricLivenessChallenge::STATUS_PASSED,
+            'expires_at' => now()->subDays(100),
+        ]);
+        BiometricLivenessChallenge::whereKey($old->id)->update([
+            'created_at' => now()->subDays(100),
+        ]);
+        $this->assertTrue($old->fresh()->created_at->lt(now()->subDays(90)));
+
+        $this->artisan('biometrics:prune-liveness-challenges')
+            ->expectsOutputToContain('1 challenge kedaluwarsa ditandai')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('biometric_liveness_challenges', [
+            'id' => $pending->id,
+            'status' => BiometricLivenessChallenge::STATUS_EXPIRED,
+            'failure_reason' => 'liveness_challenge_expired',
+        ]);
+        $this->assertDatabaseMissing('biometric_liveness_challenges', ['id' => $old->id]);
+    }
+
+    private function createTeacher(string $username): Teacher
     {
         $user = new User([
-            'nip' => $nip,
+            'username' => $username,
             'name' => 'Retention Teacher',
             'password' => 'Strong!Password123',
         ]);

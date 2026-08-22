@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1f4f46">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icons/icon-192.png" type="image/png">
+    <title>Tidak Ada Koneksi - Absensi MI</title>
+    <style>
+        :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f6f4ef; color: #21312d; }
+        body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; box-sizing: border-box; }
+        main { width: min(100%, 420px); text-align: center; }
+        img { width: 88px; height: 88px; object-fit: contain; margin-bottom: 18px; }
+        h1 { margin: 0 0 10px; font-size: 1.45rem; }
+        p { margin: 0 0 22px; line-height: 1.6; color: #5d6d68; }
+        button { border: 0; border-radius: 8px; padding: 12px 18px; background: #1f4f46; color: #fff; font: inherit; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <main>
+        <img src="/icons/icon-192.png" alt="Logo MI Lantaburo">
+        <h1>Koneksi sedang tidak tersedia</h1>
+        <p>Aplikasi membutuhkan koneksi untuk login, membaca data, memeriksa lokasi, dan menyimpan absensi.</p>
+        <button type="button" onclick="location.reload()">Coba lagi</button>
+    </main>
+</body>
+</html>

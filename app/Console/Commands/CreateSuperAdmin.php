@@ -24,7 +24,7 @@ class CreateSuperAdmin extends Command
         }
 
         $data = [
-            'nip' => trim((string) $this->ask('NIP super admin')),
+            'username' => trim((string) $this->ask('Username super admin')),
             'name' => trim((string) $this->ask('Nama lengkap')),
             'email' => trim((string) $this->ask('Email (opsional)')),
             'password' => (string) $this->secret('Password'),
@@ -32,10 +32,10 @@ class CreateSuperAdmin extends Command
         ];
 
         $validator = Validator::make($data, [
-            'nip' => ['required', 'string', 'max:30', 'unique:users,nip'],
+            'username' => ['required', 'string', 'max:30', 'unique:users,username'],
             'name' => ['required', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'confirmed', Password::min(12)->letters()->mixedCase()->numbers()->symbols()],
+            'password' => ['required', 'confirmed', \App\Support\PasswordPolicy::superAdminRule()],
         ]);
 
         if ($validator->fails()) {
@@ -48,7 +48,7 @@ class CreateSuperAdmin extends Command
 
         DB::transaction(function () use ($data): void {
             $user = new User([
-                'nip' => $data['nip'],
+                'username' => $data['username'],
                 'name' => $data['name'],
                 'email' => $data['email'] !== '' ? $data['email'] : null,
                 'password' => $data['password'],

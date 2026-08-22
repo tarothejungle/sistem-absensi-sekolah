@@ -1,7 +1,7 @@
 @php
     $teacher = $user->teacher;
     $enrollment = $teacher?->faceEnrollment;
-    $canRecapture = !$enrollment || $enrollment->canRecapture();
+    $canEnroll = !$enrollment;
 @endphp
 
 <div class="card ui-form-card mt-4">
@@ -10,7 +10,7 @@
             <span class="ui-form-section-icon"><i class="bi bi-person-bounding-box"></i></span>
             <div>
                 <h5 class="ui-form-section-title">Wajah Absensi</h5>
-                <p class="ui-form-section-subtitle">Daftarkan wajah sendiri. Foto preview hanya tersimpan sementara di browser.</p>
+                <p class="ui-form-section-subtitle">Selesaikan active liveness dengan gerakan kepala sebelum template InsightFace 512 dimensi dikunci sebagai rujukan absensi.</p>
             </div>
         </div>
 
@@ -18,24 +18,24 @@
             <div class="alert {{ $enrollment->isCompatible() ? 'alert-success' : 'alert-warning' }}">
                 <div class="fw-bold mb-1">
                     <i class="bi {{ $enrollment->isCompatible() ? 'bi-check-circle' : 'bi-exclamation-triangle' }} me-1"></i>
-                    {{ $enrollment->isCompatible() ? 'Wajah sudah terdaftar.' : 'Template wajah perlu diperbarui.' }}
+                    {{ $enrollment->isCompatible() ? 'Wajah sudah terdaftar dan dikunci.' : 'Template wajah terkunci tetapi perlu didaftarkan ulang.' }}
                 </div>
                 <div class="small">
-                    Terakhir diperbarui {{ $enrollment->enrolled_at?->format('d/m/Y H:i') }}.
-                    Kesempatan recapture tersisa: <strong>{{ $enrollment->remainingRecaptures() }} dari {{ \App\Models\TeacherFaceEnrollment::MAX_RECAPTURES }}</strong>.
+                    Template dikunci sejak {{ $enrollment->enrolled_at?->format('d/m/Y H:i') }}.
+                    Hubungi super admin untuk reset apabila template perlu diganti.
                 </div>
             </div>
         @else
             <div class="alert alert-info">
                 <i class="bi bi-info-circle me-1"></i>
-                Wajah belum terdaftar. Pendaftaran pertama tidak mengurangi kuota tiga kali recapture.
+                Wajah belum terdaftar. Selesaikan challenge liveness untuk mendaftarkan template wajah.
             </div>
         @endif
 
-        @if($canRecapture)
-            <form method="POST" action="{{ route('profile.face-enrollment.store') }}" id="face-enrollment-form" data-has-enrollment="{{ $enrollment ? '1' : '0' }}">
+        @if($canEnroll)
+            <form method="POST" action="{{ route('profile.face-enrollment.store') }}" id="face-enrollment-form" data-status-url="{{ route('biometric.status') }}">
                 @csrf
-                <input type="hidden" name="face_image" id="face-image">
+                <input type="hidden" name="liveness_challenge_id" id="liveness-challenge-id">
 
                 <div class="row g-3 align-items-stretch">
                     <div class="col-lg-6">
@@ -57,34 +57,27 @@
                     </div>
 
                     <div class="col-lg-6">
-                        <div id="face-enrollment-preview-empty" class="face-enrollment-preview-empty">
-                            <i class="bi bi-image"></i>
-                            <span>Preview hasil capture muncul di sini.</span>
+                        <div class="face-enrollment-preview-empty" aria-live="polite">
+                            <i class="bi bi-shield-check"></i>
+                            <strong>Active liveness wajib</strong>
+                            <span>Ikuti empat instruksi: lurus, menoleh, menoleh ke sisi lain, lalu lurus kembali.</span>
                         </div>
-                        <img id="face-enrollment-preview" class="face-enrollment-preview d-none" alt="Preview foto pendaftaran wajah">
                     </div>
                 </div>
 
-                <div id="face-enrollment-status" class="alert alert-secondary mt-3 mb-3" role="status">Menyiapkan kamera...</div>
+                <div id="face-enrollment-status" class="alert alert-secondary mt-3 mb-3" role="status">Memeriksa FastAPI dan model InsightFace...</div>
 
                 <div class="d-flex flex-wrap gap-2">
                     <button type="button" id="face-enrollment-capture" class="btn btn-primary" disabled>
-                        <i class="bi bi-camera me-1"></i> Ambil Foto
-                    </button>
-                    <button type="button" id="face-enrollment-retake" class="btn btn-outline-secondary d-none">
-                        <i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi Foto
-                    </button>
-                    <button type="submit" id="face-enrollment-submit" class="btn btn-success d-none">
-                        <i class="bi bi-check-circle me-1"></i>
-                        {{ $enrollment ? 'Simpan Recapture' : 'Daftarkan Wajah' }}
+                        <i class="bi bi-person-bounding-box me-1"></i> Mulai Liveness
                     </button>
                 </div>
-                <small class="text-muted d-block mt-2">Mengulangi preview sebelum disimpan tidak mengurangi kuota. Kuota berkurang hanya setelah recapture berhasil.</small>
+                <small class="text-muted d-block mt-2">Frame challenge dipakai sekali untuk verifikasi dan tidak disimpan. Setelah template dibuat, pendaftaran ulang memerlukan reset super admin.</small>
             </form>
         @else
             <div class="alert alert-danger mb-0">
                 <i class="bi bi-lock me-1"></i>
-                Batas maksimal tiga kali recapture telah tercapai. Data wajah terakhir tetap digunakan untuk absensi. Hubungi super admin jika perlu reset.
+                Template wajah sudah dikunci. Hubungi super admin untuk reset jika perlu mendaftarkan ulang.
             </div>
         @endif
     </div>
@@ -93,7 +86,6 @@
 @push('styles')
 <style>
 .face-enrollment-camera,
-.face-enrollment-preview,
 .face-enrollment-preview-empty {
     width: 100%;
     min-height: 280px;
@@ -107,8 +99,7 @@
     background: #0b1220;
 }
 
-.face-enrollment-camera video,
-.face-enrollment-preview {
+.face-enrollment-camera video {
     display: block;
     width: 100%;
     height: 280px;
@@ -116,8 +107,6 @@
 }
 
 .face-enrollment-camera video { transform: scaleX(-1); }
-
-.face-enrollment-preview { border: 1px solid var(--bs-border-color); }
 
 .face-enrollment-preview-empty {
     display: flex;
@@ -165,9 +154,18 @@
     .face-enrollment-overlay.is-scanning .enrollment-scan-line,
     .enrollment-countdown.is-pulsing { animation: none; }
 }
+
 </style>
 @endpush
 
 @push('scripts')
-<script src="{{ asset('js/face-enrollment.js') }}?v=3.0.0"></script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
+    window.livenessOptions = {
+        challengeUrl: @json(route('biometric.liveness.challenges.store')),
+        modelUrl: @json(asset('models')),
+    };
+</script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}' src="{{ asset('js/face-api.min.js') }}?v=0.20.0-full1"></script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}' src="{{ asset('js/liveness.js') }}?v=1.1.0"></script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}' src="{{ asset('js/face-enrollment.js') }}?v=6.0.0"></script>
 @endpush

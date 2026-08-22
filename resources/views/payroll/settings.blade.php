@@ -17,10 +17,7 @@
             <div class="card-body">
 
                 <div class="alert alert-info">
-                    Notes: Potongan dihitung otomatis berdasarkan gaji pokok.
-                    Guru dengan gaji Rp1.000.000 atau lebih mendapatkan potongan Rp30.000 per ketidakhadiran,
-                    sedangkan guru dengan gaji di bawah Rp1.000.000 mendapatkan potongan Rp20.000 per ketidakhadiran.
-                    Potongan alfa/tidak hadir dicatat sebagai kas sekolah.
+                    Nilai potongan disimpan per guru dan dipakai saat generate payroll. Nilai awal baru mengikuti tier gaji, lalu dapat disesuaikan bendahara. Potongan alfa/tidak hadir dicatat sebagai kas sekolah.
                 </div>
 
                 <div class="d-flex gap-2 justify-content-end mb-4 flex-wrap">
@@ -66,7 +63,10 @@
                                         $salary->gaji_pokok ?? 0
                                     );
 
-                                    $potonganOtomatis = (float) $gajiPokok >= 1000000 ? 30000 : 20000;
+                                    $potonganOtomatis = old(
+                                        'salaries.' . $teacher->id . '.potongan_per_absen',
+                                        $salary->potongan_per_absen ?? ((float) $gajiPokok >= 1000000 ? 30000 : 20000)
+                                    );
 
                                     $keterangan = old(
                                         'salaries.' . $teacher->id . '.keterangan',
@@ -78,7 +78,7 @@
                                     <td>
                                         <strong>{{ $teacher->nama_lengkap ?? '-' }}</strong>
                                         <br>
-                                        <small class="text-muted">{{ $teacher->user->nip ?? '-' }}</small>
+                                        <small class="text-muted">{{ $teacher->user->username ?? '-' }}</small>
                                     </td>
 
                                     <td>{{ $teacher->jabatan ?? '-' }}</td>
@@ -97,13 +97,16 @@
                                     <td>
                                         <input
                                             type="number"
+                                            name="salaries[{{ $teacher->id }}][potongan_per_absen]"
                                             class="form-control potongan-input"
                                             value="{{ $potonganOtomatis }}"
-                                            readonly
+                                            min="0"
+                                            step="0.01"
+                                            required
                                         >
 
                                         <small class="text-muted">
-                                            Otomatis berdasarkan gaji pokok.
+                                            Dapat disesuaikan untuk guru ini.
                                         </small>
                                     </td>
 
@@ -142,7 +145,7 @@
 @endsection
 
 @push('scripts')
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('tr').forEach(function (row) {
             const gajiInput = row.querySelector('.gaji-pokok-input');
@@ -152,18 +155,11 @@
                 return;
             }
 
-            function updatePotongan() {
-                const gaji = parseFloat(gajiInput.value || 0);
-
-                if (gaji >= 1000000) {
-                    potonganInput.value = 30000;
-                } else {
-                    potonganInput.value = 20000;
+            gajiInput.addEventListener('change', function () {
+                if (potonganInput.value === '') {
+                    potonganInput.value = parseFloat(gajiInput.value || 0) >= 1000000 ? 30000 : 20000;
                 }
-            }
-
-            gajiInput.addEventListener('input', updatePotongan);
-            updatePotongan();
+            });
         });
     });
 </script>

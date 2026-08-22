@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\LoginActivity;
 use App\Models\Teacher;
+use App\Services\AttendanceWindowService;
 use App\Services\DailyAttendanceStatusService;
+use App\Services\UserProfileCompletenessService;
 
 class DashboardController extends Controller
 {
@@ -15,33 +17,22 @@ class DashboardController extends Controller
         $dailyAttendance = app(DailyAttendanceStatusService::class);
         $today = now('Asia/Jakarta')->toDateString();
 
-        // DASHBOARD KHUSUS GURU
-        if (in_array($role, ['guru', 'tenaga_kependidikan'], true)) {
+        if (in_array($role, Teacher::DATA_GURU_ROLES, true)) {
             $teacher = $user->teacher;
 
             if ($teacher) {
-                $teacher->load(['attendanceSessions', 'user']);
-            }
-
-            return view('dashboard.index', [
-                'role' => $role,
-                'teacher' => $teacher,
-                'loginActivities' => collect(),
-            ]);
-        }
-
-        // DASHBOARD KHUSUS BENDAHARA DAN KEPALA SEKOLAH
-        if (in_array($role, ['bendahara', 'kepala_sekolah'], true)) {
-            $teacher = $user->teacher;
-
-            if ($teacher) {
-                $teacher->load(['attendanceSessions', 'user']);
+                $teacher->load([
+                    'attendanceSessions' => fn ($query) => $query->where('attendance_sessions.status', 'aktif'),
+                    'user',
+                ]);
             }
 
             $data = [
                 'role' => $role,
                 'teacher' => $teacher,
                 'loginActivities' => collect(),
+                'profileCompleteness' => app(UserProfileCompletenessService::class)->check($user),
+                'sessionWindows' => $this->buildSessionWindows($teacher),
             ];
 
             if ($role === 'kepala_sekolah') {
@@ -60,10 +51,13 @@ class DashboardController extends Controller
             return view('dashboard.index', $data);
         }
 
-        // DASHBOARD UNTUK ADMIN / SUPER ADMIN
+        abort_unless($role === 'super_admin', 403);
+
         $expectedTeachers = $dailyAttendance->expectedTeachersForDate($today);
         $totalGuru = Teacher::whereHas('user', function ($query) {
-            $query->where('status', 'aktif');
+            $query
+                ->where('status', 'aktif')
+                ->whereIn('role', Teacher::DATA_GURU_ROLES);
         })->count();
 
         // Sekaligus membuat status otomatis untuk sakit/izin/cuti/tugas luar/alfa bila syaratnya terpenuhi.
@@ -98,5 +92,18 @@ class DashboardController extends Controller
             'rekapHariIni' => $rekapHariIni,
             'loginActivities' => $loginActivities,
         ]);
+    }
+
+    private function buildSessionWindows(?Teacher $teacher): array
+    {
+        if (! $teacher || $teacher->attendanceSessions->isEmpty()) {
+            return [];
+        }
+
+        $windowService = app(AttendanceWindowService::class);
+
+        return $teacher->attendanceSessions
+            ->mapWithKeys(fn ($session) => [$session->id => $windowService->resolve($session)])
+            ->all();
     }
 }

@@ -4,7 +4,7 @@
 <div class="container-fluid">
     <div class="page-header">
         
-        @if (in_array(auth()->user()->role, ['guru', 'bendahara']))
+        @if (in_array(auth()->user()->role, ['guru', 'bendahara', 'tenaga_kependidikan']))
         <h3 class="mb-0 fw-bold">Pengajuan Izin/Cuti</h3>
         @endif
         
@@ -14,7 +14,7 @@
 
     </div>
 
-    @if (in_array(auth()->user()->role, ['guru', 'bendahara']))
+    @if (in_array(auth()->user()->role, ['guru', 'bendahara', 'tenaga_kependidikan']))
         <div class="ui-page-action-row">
             <a href="{{ route('leave.create') }}" class="btn-add-primary">
                 <i class="bi bi-plus-lg"></i>
@@ -24,14 +24,13 @@
     @endif
 
     @php
-        $isGuru = auth()->user()->role === 'guru';
         $canApprove = in_array(auth()->user()->role, ['super_admin', 'kepala_sekolah']);
     @endphp
 
     @php
         $user = auth()->user();
 
-        $isGuruLike = in_array($user->role, ['guru', 'bendahara']);
+        $isGuruLike = in_array($user->role, ['guru', 'bendahara', 'tenaga_kependidikan']);
         $isApprover = in_array($user->role, ['super_admin', 'kepala_sekolah']);
         $loginTeacherId = $user->teacher->id ?? null;
     @endphp
@@ -60,7 +59,9 @@
                 @forelse($leaves as $leave)
                     @php
                         $isRequester = $isGuruLike && $leave->teacher_id == $loginTeacherId;
-                        $isInfal = $isGuruLike && $leave->infal_teacher_id == $loginTeacherId;
+                        $loginInfal = $isGuruLike ? $leave->infalTeachers->firstWhere('id', $loginTeacherId) : null;
+                        $isInfal = (bool) $loginInfal;
+                        $hasRejectedInfal = $leave->infalTeachers->contains(fn ($teacher) => $teacher->pivot->status_infal === 'ditolak');
                     @endphp
 
                     <tr>
@@ -71,13 +72,7 @@
 
                         {{-- Jenis --}}
                         <td>
-                            {{ ucfirst(str_replace('_', ' ', $leave->jenis_pengajuan)) }}
-
-                            @if($leave->is_sementara)
-                                <div class="mt-1">
-                                    <span class="badge bg-info text-dark">Sementara</span>
-                                </div>
-                            @endif
+                            {{ $leave->is_sementara ? 'Izin Sementara' : ucfirst(str_replace('_', ' ', $leave->jenis_pengajuan)) }}
                         </td>
 
                         {{-- Tanggal --}}
@@ -92,8 +87,10 @@
 
                         {{-- Guru Pengganti --}}
                         <td>
-                            @if($leave->infal_teacher_id && $leave->infalTeacher)
-                                {{ $leave->infalTeacher->nama_lengkap }}
+                            @if($leave->infalTeachers->isNotEmpty())
+                                @foreach($leave->infalTeachers as $infalTeacher)
+                                    <div>{{ $infalTeacher->nama_lengkap }}</div>
+                                @endforeach
                             @else
                                 <span class="badge bg-secondary">Tidak Perlu</span>
                             @endif
@@ -194,7 +191,7 @@
                             @if($leave->approved_at || $leave->approver || $leave->catatan_approval)
                                 <div class="small text-muted mt-2">
                                     @if($leave->approver)
-                                        Oleh: {{ $leave->approver->name ?? $leave->approver->nip }}
+                                        Oleh: {{ $leave->approver->name ?? $leave->approver->username }}
                                     @endif
 
                                     @if($leave->approved_at)
@@ -210,22 +207,20 @@
 
                         {{-- Status Infal --}}
                         <td>
-                            @if(!$leave->infal_teacher_id)
+                            @if($leave->infalTeachers->isEmpty())
                                 <span class="badge bg-secondary">Tidak Perlu</span>
-                            @elseif($leave->status_infal === 'pending')
-                                <span class="badge bg-warning text-dark">Menunggu</span>
-                            @elseif($leave->status_infal === 'disetujui')
-                                <span class="badge bg-success">Disetujui</span>
-                            @elseif($leave->status_infal === 'ditolak')
-                                <span class="badge bg-danger">Ditolak</span>
                             @else
-                                <span class="badge bg-secondary">-</span>
-                            @endif
-
-                            @if($leave->catatan_infal)
-                                <div class="small text-muted mt-2">
-                                    <span class="fw-semibold">Catatan:</span> {{ $leave->catatan_infal }}
-                                </div>
+                                @foreach($leave->infalTeachers as $infalTeacher)
+                                    <div class="mb-1">
+                                        <span class="badge {{ $infalTeacher->pivot->status_infal === 'disetujui' ? 'bg-success' : ($infalTeacher->pivot->status_infal === 'ditolak' ? 'bg-danger' : 'bg-warning text-dark') }}">
+                                            {{ ucfirst($infalTeacher->pivot->status_infal === 'pending' ? 'menunggu' : $infalTeacher->pivot->status_infal) }}
+                                        </span>
+                                        <small>{{ $infalTeacher->nama_lengkap }}</small>
+                                        @if($infalTeacher->pivot->catatan_infal)
+                                            <div class="small text-muted">Catatan: {{ $infalTeacher->pivot->catatan_infal }}</div>
+                                        @endif
+                                    </div>
+                                @endforeach
                             @endif
                         </td>
 
@@ -260,7 +255,7 @@
                                 </div>
 
                             {{-- Guru pengaju: kalau izin disetujui tapi guru infal menolak, boleh ganti guru pengganti --}}
-                            @elseif($isRequester && $leave->infal_teacher_id && $leave->status_pengajuan === 'disetujui' && $leave->status_infal === 'ditolak')
+                            @elseif($isRequester && $leave->status_pengajuan === 'disetujui' && $hasRejectedInfal)
                                 <a 
                                     href="{{ route('leave.edit', $leave) }}" 
                                     class="btn btn-warning btn-sm"
@@ -269,7 +264,7 @@
                                 </a>
 
                             {{-- Guru infal: hanya bisa approve/tolak setelah izin disetujui kepsek/super admin --}}
-                            @elseif($isInfal && $leave->status_pengajuan === 'disetujui' && $leave->status_infal === 'pending')
+                            @elseif($isInfal && $leave->status_pengajuan === 'disetujui' && $loginInfal->pivot->status_infal === 'pending')
                                 <div class="d-flex gap-1 flex-wrap">
                                     <form 
                                         action="{{ route('leave.infal.approve', $leave) }}" 
@@ -307,7 +302,8 @@
                                             class="form-control form-control-sm mb-1"
                                             rows="2"
                                             maxlength="500"
-                                            placeholder="Catatan penolakan (opsional)"
+                                            placeholder="Catatan penolakan (wajib)"
+                                            required
                                         ></textarea>
 
                                         <button type="submit" class="btn btn-danger btn-sm">
@@ -375,7 +371,7 @@
                                 </div>
 
                             {{-- Super admin melihat izin sudah disetujui tapi infal ditolak --}}
-                            @elseif($isApprover && $leave->status_pengajuan === 'disetujui' && $leave->status_infal === 'ditolak')
+                            @elseif($isApprover && $leave->status_pengajuan === 'disetujui' && $hasRejectedInfal)
                                 <span class="text-muted">Menunggu guru memilih pengganti lain</span>
 
                             @else

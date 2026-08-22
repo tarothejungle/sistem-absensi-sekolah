@@ -12,7 +12,33 @@
     <div class="ui-page-action-row">
         <a href="{{ route('payroll.index') }}" class="btn btn-secondary"><i class="bi bi-arrow-left me-1"></i> Kembali</a>
         <a href="{{ route('payroll.print', $period) }}" class="btn btn-danger" target="_blank"><i class="bi bi-file-earmark-pdf-fill me-1"></i> Cetak Rekap PDF</a>
+        @if($period->status === 'draft')
+            <form class="payroll-finalize-form" method="POST" action="{{ route('payroll.finalize', $period) }}" data-confirm-action="true" data-confirm-type="warning" data-confirm-title="Finalisasi periode payroll?" data-confirm-message="Setelah final, periode tidak dapat digenerate ulang kecuali dibuka kembali oleh super admin." data-confirm-submit="Finalisasi">
+                @csrf
+                <button type="submit" class="btn btn-success"><i class="bi bi-lock-fill me-1"></i> Finalisasi</button>
+            </form>
+        @endif
     </div>
+
+    <div class="alert alert-info mt-3">
+        Status periode: <strong>{{ ucfirst($period->status) }}</strong>.
+        @if($period->finalized_at)
+            Difinalisasi {{ $period->finalized_at->format('d/m/Y H:i') }} oleh {{ $period->finalizer->name ?? '-' }}.
+        @endif
+    </div>
+
+    @if($period->status === 'final' && auth()->user()->role === 'super_admin')
+        <form method="POST" action="{{ route('payroll.reopen', $period) }}" class="row g-2 align-items-end mb-3">
+            @csrf
+            <div class="col-md-9">
+                <label for="payroll-reopen-reason" class="form-label">Alasan membuka kembali</label>
+                <input id="payroll-reopen-reason" type="text" name="reason" class="form-control" minlength="5" maxlength="1000" required>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-warning w-100"><i class="bi bi-unlock-fill me-1"></i> Buka Kembali</button>
+            </div>
+        </form>
+    @endif
 
     <div class="card border-0 shadow-sm">
         <div class="card-body">
@@ -35,7 +61,7 @@
                             <tr>
                                 <td>
                                     <div class="fw-bold">{{ $item->teacher->nama_lengkap ?? '-' }}</div>
-                                    <small class="text-muted">{{ $item->teacher->user->nip ?? '-' }}</small>
+                                    <small class="text-muted">{{ $item->teacher->user->username ?? '-' }}</small>
                                 </td>
                                 <td>{{ $item->teacher->jabatan ?? '-' }}</td>
                                 <td>Rp {{ number_format($item->gaji_pokok, 0, ',', '.') }}</td>
@@ -80,5 +106,26 @@
             </div>
         </div>
     </div>
+
+    @if($period->audits->isNotEmpty())
+        <div class="mt-4">
+            <h5 class="fw-bold">Riwayat Audit Payroll</h5>
+            <div class="table-responsive-mobile">
+                <table class="table table-bordered align-middle">
+                    <thead><tr><th>Waktu</th><th>Aksi</th><th>Pengguna</th><th>Alasan</th></tr></thead>
+                    <tbody>
+                        @foreach($period->audits as $audit)
+                            <tr>
+                                <td>{{ $audit->created_at->format('d/m/Y H:i') }}</td>
+                                <td>{{ ucfirst($audit->action) }}</td>
+                                <td>{{ $audit->actor->name ?? '-' }}</td>
+                                <td>{{ $audit->reason ?? '-' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
 </div>
 @endsection

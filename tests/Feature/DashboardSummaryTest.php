@@ -37,9 +37,17 @@ class DashboardSummaryTest extends TestCase
         $baselineIncomplete = (int) $baseline->viewData('tidakLengkapHariIni');
 
         $session = $this->createSession();
+        [$superAdminTeacher] = $this->createTeacherUser('super_admin', 'Super Admin Bukan Guru Dashboard');
         [$presentTeacher] = $this->createTeacherUser('guru', 'Guru Hadir Dashboard');
         [$lateTeacher] = $this->createTeacherUser('guru', 'Guru Terlambat Dashboard');
         [$incompleteTeacher] = $this->createTeacherUser('guru', 'Guru Tidak Lengkap Dashboard');
+
+        $this->createAttendance($superAdminTeacher, $session, [
+            'check_in_time' => Carbon::parse('2037-08-10 07:00:00', 'Asia/Jakarta'),
+            'check_out_time' => Carbon::parse('2037-08-10 16:00:00', 'Asia/Jakarta'),
+            'status_kehadiran' => 'hadir',
+            'keterlambatan_menit' => 0,
+        ]);
 
         $this->createAttendance($presentTeacher, $session, [
             'check_in_time' => Carbon::parse('2037-08-10 07:00:00', 'Asia/Jakarta'),
@@ -71,6 +79,7 @@ class DashboardSummaryTest extends TestCase
         $this->assertSame($baselinePresent + 1, (int) $response->viewData('hadirHariIni'));
         $this->assertSame($baselineLate + 1, (int) $response->viewData('terlambatHariIni'));
         $this->assertSame($baselineIncomplete + 1, (int) $response->viewData('tidakLengkapHariIni'));
+        $this->assertFalse($response->viewData('rekapHariIni')->contains('teacher_id', $superAdminTeacher->id));
 
         $incompleteTeacher->refresh();
         $incompleteAttendance = Attendance::where('teacher_id', $incompleteTeacher->id)
@@ -122,7 +131,7 @@ class DashboardSummaryTest extends TestCase
     private function createUser(string $role, string $name = 'User Dashboard Test'): User
     {
         $user = User::create([
-            'nip' => uniqid('nip_', true),
+            'username' => uniqid('user_', true),
             'name' => $name . ' ' . uniqid(),
             'email' => uniqid('dashboard_', true) . '@example.test',
             'password' => Hash::make('password'),

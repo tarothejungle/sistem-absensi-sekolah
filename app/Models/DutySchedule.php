@@ -29,4 +29,10 @@ class DutySchedule extends Model
         return $this->belongsToMany(Teacher::class, 'duty_schedule_teacher')
             ->withTimestamps();
     }
+
+    public function attendanceSessions(): BelongsToMany
+    {
+        return $this->belongsToMany(AttendanceSession::class, 'attendance_session_duty_schedule')
+            ->withTimestamps();
+    }
 }

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Exports\AttendanceReportExport;
 use App\Models\Attendance;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -12,32 +14,17 @@ class ReportController extends Controller
 {
     public function index(Request $request)
     {
-        // $perPage = $this->resolvePerPage($request);
-        $query = Attendance::with(['teacher.user']);
-
-        if ($request->filled('start_date')) {
-            $query->whereDate('tanggal', '>=', $request->start_date);
-        }
-
-        if ($request->filled('end_date')) {
-            $query->whereDate('tanggal', '<=', $request->end_date);
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status_kehadiran', $request->status);
-        }
-
-        // $allAttendances = (clone $query)
-        //     ->orderBy('tanggal', 'asc')
-        //     ->orderBy('check_in_time', 'asc')
-        //     ->get();
-
+        $filters = $this->validatedFilters($request);
+        $query = $this->filteredQuery($filters);
+        $statusCounts = (clone $query)
+            ->selectRaw('status_kehadiran, COUNT(*) as aggregate')
+            ->groupBy('status_kehadiran')
+            ->pluck('aggregate', 'status_kehadiran');
         $attendances = $query
             ->orderBy('tanggal', 'asc')
             ->orderBy('check_in_time', 'asc')
-            ->get();
-            // ->paginate($perPage)
-            // ->withQueryString();
+            ->paginate(25)
+            ->withQueryString();
 
         $chartLabels = [
             'Hadir',
@@ -50,13 +37,13 @@ class ReportController extends Controller
         ];
 
         $chartData = [
-            $attendances->where('status_kehadiran', 'hadir')->count(),
-            $attendances->where('status_kehadiran', 'terlambat')->count(),
-            $attendances->where('status_kehadiran', 'hadir_tidak_lengkap')->count(),
-            $attendances->where('status_kehadiran', 'izin')->count(),
-            $attendances->where('status_kehadiran', 'sakit')->count(),
-            $attendances->where('status_kehadiran', 'cuti')->count(),
-            $attendances->where('status_kehadiran', 'alfa')->count(),
+            (int) ($statusCounts['hadir'] ?? 0),
+            (int) ($statusCounts['terlambat'] ?? 0),
+            (int) ($statusCounts['hadir_tidak_lengkap'] ?? 0),
+            (int) ($statusCounts['izin'] ?? 0),
+            (int) ($statusCounts['sakit'] ?? 0),
+            (int) ($statusCounts['cuti'] ?? 0),
+            (int) ($statusCounts['alfa'] ?? 0),
         ];
 
         return view('report.index', compact(
@@ -68,11 +55,7 @@ class ReportController extends Controller
 
     public function exportExcel(Request $request)
     {
-        $filters = [
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-            'status' => $request->status,
-        ];
+        $filters = $this->validatedFilters($request);
 
         return Excel::download(
             new AttendanceReportExport($filters),
@@ -82,20 +65,33 @@ class ReportController extends Controller
 
     public function exportPdf(Request $request)
     {
-        $attendances = $this->getFilteredAttendances($request);
+        $filters = $this->validatedFilters($request);
+        $streamUrl = route('reports.stream.pdf', $filters);
+        $downloadUrl = route('reports.download.pdf', $filters);
 
-        $pdf = Pdf::loadView('report.export_pdf', compact('attendances'))
-            ->setPaper('a4', 'landscape');
+        return view('report.preview_pdf', compact('streamUrl', 'downloadUrl'));
+    }
 
-        $pdfBase64 = base64_encode($pdf->output());
-        $downloadUrl = route('reports.download.pdf', $request->query());
+    public function streamPdf(Request $request)
+    {
+        $filters = $this->validatedFilters($request);
+        $attendances = $this->filteredQuery($filters)
+            ->orderBy('tanggal', 'asc')
+            ->orderBy('check_in_time', 'asc')
+            ->get();
 
-        return view('report.preview_pdf', compact('pdfBase64', 'downloadUrl'));
+        return Pdf::loadView('report.export_pdf', compact('attendances'))
+            ->setPaper('a4', 'landscape')
+            ->stream('laporan-absensi.pdf');
     }
 
     public function downloadPdf(Request $request)
     {
-        $attendances = $this->getFilteredAttendances($request);
+        $filters = $this->validatedFilters($request);
+        $attendances = $this->filteredQuery($filters)
+            ->orderBy('tanggal', 'asc')
+            ->orderBy('check_in_time', 'asc')
+            ->get();
 
         $pdf = Pdf::loadView('report.export_pdf', compact('attendances'))
             ->setPaper('a4', 'landscape');
@@ -103,34 +99,43 @@ class ReportController extends Controller
         return $pdf->download('laporan-absensi.pdf');
     }
 
-    private function getFilteredAttendances(Request $request)
+    private function filteredQuery(array $filters): Builder
     {
-        $query = Attendance::with(['teacher.user']);
+        $query = Attendance::with(['teacher.user', 'temporaryLeaveRequest']);
 
-        if ($request->filled('start_date')) {
-            $query->whereDate('tanggal', '>=', $request->start_date);
+        if (! empty($filters['start_date'])) {
+            $query->whereDate('tanggal', '>=', $filters['start_date']);
         }
 
-        if ($request->filled('end_date')) {
-            $query->whereDate('tanggal', '<=', $request->end_date);
+        if (! empty($filters['end_date'])) {
+            $query->whereDate('tanggal', '<=', $filters['end_date']);
         }
 
-        if ($request->filled('status')) {
-            $query->where('status_kehadiran', $request->status);
+        if (! empty($filters['status'])) {
+            $query->where('status_kehadiran', $filters['status']);
         }
 
-        return $query
-            ->orderBy('tanggal', 'asc')
-            ->orderBy('check_in_time', 'asc')
-            ->get();
+        return $query;
     }
 
+    private function validatedFilters(Request $request): array
+    {
+        $validator = validator($request->all(), [
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'status' => 'nullable|in:hadir,terlambat,hadir_tidak_lengkap,izin,sakit,cuti,tugas_luar,alfa',
+        ]);
+        $validator->after(function ($validator) use ($request): void {
+            if (! $request->filled('start_date') || ! $request->filled('end_date') || $validator->errors()->isNotEmpty()) {
+                return;
+            }
+            $start = Carbon::parse($request->input('start_date'));
+            $end = Carbon::parse($request->input('end_date'));
+            if ($start->diffInDays($end) > 366) {
+                $validator->errors()->add('end_date', 'Rentang laporan maksimal 366 hari.');
+            }
+        });
 
-    // private function resolvePerPage(Request $request, int $default = 7): int
-    // {
-    //     $allowed = [7, 14, 21, 28, 35, 70];
-    //     $perPage = (int) $request->input('per_page', $default);
-
-    //     return in_array($perPage, $allowed, true) ? $perPage : $default;
-    // }
+        return $validator->validate();
+    }
 }

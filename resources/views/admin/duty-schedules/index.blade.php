@@ -64,7 +64,7 @@
                                     >
                                     <span>
                                         <strong>{{ $teacher->nama_lengkap }}</strong>
-                                        <small>{{ $teacher->user->nip ?? '-' }} - {{ $teacher->jabatan ?: 'Guru/Karyawan' }}</small>
+                                        <small>{{ $teacher->user->username ?? '-' }} - {{ $teacher->jabatan ?: 'Guru/Karyawan' }}</small>
                                     </span>
                                 </label>
                             @empty
@@ -75,6 +75,19 @@
                     <div class="col-12">
                         <label class="form-label">Keterangan</label>
                         <textarea name="keterangan" class="form-control" rows="3" placeholder="Catatan tambahan bila diperlukan">{{ old('keterangan') }}</textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Sesi Absensi Piket</label>
+                        <div class="teacher-picker">
+                            @forelse($sessions as $session)
+                                <label class="teacher-picker-item">
+                                    <input type="checkbox" class="form-check-input" name="attendance_session_ids[]" value="{{ $session->id }}" @checked(in_array($session->id, old('attendance_session_ids', [])))>
+                                    <span><strong>{{ $session->nama_sesi }}</strong><small>{{ substr($session->jam_masuk, 0, 5) }} - {{ substr($session->jam_pulang, 0, 5) }}</small></span>
+                                </label>
+                            @empty
+                                <div class="text-muted">Belum ada sesi aktif.</div>
+                            @endforelse
+                        </div>
                     </div>
                 </div>
             </div>
@@ -102,6 +115,7 @@
                             <th>Tanggal</th>
                             <th>Status</th>
                             <th>Petugas</th>
+                            <th>Sesi</th>
                             <th>Keterangan</th>
                             <th width="170">Aksi</th>
                         </tr>
@@ -110,6 +124,7 @@
                         @forelse($dutySchedules as $dutySchedule)
                             @php
                                 $selectedTeacherIds = $dutySchedule->teachers->pluck('id')->all();
+                                $selectedSessionIds = $dutySchedule->attendanceSessions->pluck('id')->all();
                             @endphp
                             <tr>
                                 <td>
@@ -136,6 +151,13 @@
                                             <span class="is-empty">Belum ada petugas</span>
                                         @endforelse
                                     </div>
+                                </td>
+                                <td>
+                                    @forelse($dutySchedule->attendanceSessions as $session)
+                                        <span class="badge bg-primary">{{ $session->nama_sesi }} {{ substr($session->jam_masuk, 0, 5) }}-{{ substr($session->jam_pulang, 0, 5) }}</span>
+                                    @empty
+                                        <span class="text-danger">Belum diatur</span>
+                                    @endforelse
                                 </td>
                                 <td>{{ $dutySchedule->keterangan ?: '-' }}</td>
                                 <td>
@@ -207,7 +229,7 @@
                                                                             >
                                                                             <span>
                                                                                 <strong>{{ $teacher->nama_lengkap }}</strong>
-                                                                                <small>{{ $teacher->user->nip ?? '-' }} - {{ $teacher->jabatan ?: 'Guru/Karyawan' }}</small>
+                                                                                <small>{{ $teacher->user->username ?? '-' }} - {{ $teacher->jabatan ?: 'Guru/Karyawan' }}</small>
                                                                             </span>
                                                                         </label>
                                                                     @endforeach
@@ -216,6 +238,17 @@
                                                             <div class="col-12">
                                                                 <label class="form-label">Keterangan</label>
                                                                 <textarea name="keterangan" class="form-control" rows="3">{{ $dutySchedule->keterangan }}</textarea>
+                                                            </div>
+                                                            <div class="col-12">
+                                                                <label class="form-label">Sesi Absensi Piket</label>
+                                                                <div class="teacher-picker">
+                                                                    @foreach($sessions as $session)
+                                                                        <label class="teacher-picker-item">
+                                                                            <input type="checkbox" class="form-check-input" name="attendance_session_ids[]" value="{{ $session->id }}" @checked(in_array($session->id, $selectedSessionIds))>
+                                                                            <span><strong>{{ $session->nama_sesi }}</strong><small>{{ substr($session->jam_masuk, 0, 5) }} - {{ substr($session->jam_pulang, 0, 5) }}</small></span>
+                                                                        </label>
+                                                                    @endforeach
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -233,7 +266,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-center text-muted">Belum ada jadwal piket yang diatur.</td>
+                                <td colspan="6" class="text-center text-muted">Belum ada jadwal piket yang diatur.</td>
                             </tr>
                         @endforelse
                     </tbody>

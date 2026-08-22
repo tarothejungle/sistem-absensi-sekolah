@@ -32,6 +32,7 @@ return [
     ],
 
     'turnstile' => [
+        'enabled' => env('TURNSTILE_ENABLED', env('APP_ENV') === 'production'),
         'site_key' => env('TURNSTILE_SITE_KEY'),
         'secret_key' => env('TURNSTILE_SECRET_KEY'),
         'hostname' => env('TURNSTILE_HOSTNAME'),
@@ -44,8 +45,10 @@ return [
         'timeout' => env('FACE_SERVICE_TIMEOUT', 15),
     ],
 
-    'attendance' => [
-        'face_photo_retention_days' => env('ATTENDANCE_FACE_PHOTO_RETENTION_DAYS', 30),
+    'aio' => [
+        'api_key' => env('AIO_INTEGRATION_API_KEY', ''),
+        'previous_api_key' => env('AIO_INTEGRATION_PREVIOUS_API_KEY', ''),
+        'require_https' => env('AIO_INTEGRATION_REQUIRE_HTTPS', env('APP_ENV') === 'production'),
     ],
 
 ];

@@ -34,7 +34,7 @@
                         <div class="col-md-7 ui-field">
                             <label class="form-label">Cari Alamat Sekolah</label>
                             <div class="input-group">
-                                <input type="text" id="searchBox" class="form-control" placeholder="Contoh: MI Lantaburo Bombana">
+                                <input type="text" id="searchBox" class="form-control" placeholder="">
                                 <button type="button" class="btn btn-secondary" onclick="searchLocation()">
                                     <i class="bi bi-search"></i>
                                     Cari
@@ -118,11 +118,11 @@
     </div>
 </div>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}' src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 
-<script>
+<script nonce='{{ request()->attributes->get('csp_nonce') }}'>
     let defaultLat = parseFloat(document.getElementById('latitude').value) || -6.2000000;
     let defaultLng = parseFloat(document.getElementById('longitude').value) || 106.8166660;
     let defaultRadius = parseInt(document.getElementById('radius_meter').value) || 150;

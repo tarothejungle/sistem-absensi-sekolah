@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceSession;
+use App\Services\AttendanceWindowService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class AttendanceSessionController extends Controller
@@ -25,6 +27,14 @@ class AttendanceSessionController extends Controller
     {
         $data = $request->validate($this->rules());
 
+        $timeErrors = $this->validateTimeConsistency($data);
+
+        if (! empty($timeErrors)) {
+            return back()
+                ->withInput()
+                ->withErrors(['time_consistency' => implode(' ', $timeErrors)]);
+        }
+
         AttendanceSession::create($data);
 
         return redirect()
@@ -40,6 +50,14 @@ class AttendanceSessionController extends Controller
     public function update(Request $request, AttendanceSession $session)
     {
         $data = $request->validate($this->rules());
+
+        $timeErrors = $this->validateTimeConsistency($data);
+
+        if (! empty($timeErrors)) {
+            return back()
+                ->withInput()
+                ->withErrors(['time_consistency' => implode(' ', $timeErrors)]);
+        }
 
         $session->update($data);
 
@@ -79,12 +97,11 @@ class AttendanceSessionController extends Controller
         if ($session->teachers()->count() > 0) {
             return back()->with('error', 'Sesi tidak dapat dihapus karena masih digunakan oleh guru.');
         }
- 
+
         $session->delete();
- 
+
         return back()->with('success', 'Sesi absensi berhasil dihapus.');
     }
-
 
     public function toggle(AttendanceSession $session)
     {
@@ -108,5 +125,31 @@ class AttendanceSessionController extends Controller
             'batas_check_out_selesai' => 'required|date_format:H:i',
             'status' => 'required|in:aktif,nonaktif',
         ];
+    }
+
+    private function validateTimeConsistency(array $data): array
+    {
+        $errors = [];
+        $session = new AttendanceSession($data);
+        $window = app(AttendanceWindowService::class)->resolve($session, Carbon::parse('2026-01-05', config('app.timezone')));
+        $toleransi = (int) $data['toleransi_terlambat'];
+
+        if ($window['batas_tepat_waktu']->gt($window['check_in_selesai'])) {
+            $errors[] = 'Jam masuk ditambah toleransi ('.substr($data['jam_masuk'], 0, 5).' + '.$toleransi.' mnt) tidak boleh melewati batas akhir check-in ('.substr($data['batas_check_in_selesai'], 0, 5).').';
+        }
+
+        if ($window['check_in_mulai']->equalTo($window['check_in_selesai'])) {
+            $errors[] = 'Batas mulai dan akhir check-in tidak boleh sama.';
+        } elseif ($window['check_in_mulai']->diffInMinutes($window['check_in_selesai']) > 720) {
+            $errors[] = 'Rentang check-in tidak boleh lebih dari 12 jam.';
+        }
+
+        if ($window['check_out_mulai']->equalTo($window['check_out_selesai'])) {
+            $errors[] = 'Batas mulai dan akhir check-out tidak boleh sama.';
+        } elseif ($window['check_out_mulai']->diffInMinutes($window['check_out_selesai']) > 720) {
+            $errors[] = 'Rentang check-out tidak boleh lebih dari 12 jam.';
+        }
+
+        return $errors;
     }
 }

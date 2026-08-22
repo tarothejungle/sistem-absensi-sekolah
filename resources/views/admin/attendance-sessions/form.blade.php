@@ -61,6 +61,7 @@
                                 value="{{ old('jam_masuk', $session ? substr($session->jam_masuk, 0, 5) : '') }}"
                                 required
                             >
+                            <small class="text-muted">Jadwal resmi mulai bekerja.</small>
                         </div>
 
                         <div class="col-md-3 ui-field">
@@ -72,10 +73,11 @@
                                 value="{{ old('jam_pulang', $session ? substr($session->jam_pulang, 0, 5) : '') }}"
                                 required
                             >
+                            <small class="text-muted">Jadwal resmi selesai bekerja.</small>
                         </div>
 
                         <div class="col-md-6 ui-field">
-                            <label class="form-label">Toleransi Terlambat Menit</label>
+                            <label class="form-label">Toleransi Keterlambatan (Menit)</label>
                             <input
                                 type="number"
                                 name="toleransi_terlambat"
@@ -84,6 +86,7 @@
                                 min="0"
                                 required
                             >
+                            <small class="text-muted">Tambahan waktu setelah jam masuk yang masih dianggap tepat waktu. Contoh: 15 menit berarti check-in sampai pukul 07:15 masih status hadir.</small>
                         </div>
 
                         <div class="col-md-6 ui-field">
@@ -103,7 +106,7 @@
                         <span class="ui-form-section-icon"><i class="bi bi-box-arrow-in-right"></i></span>
                         <div>
                             <h5 class="ui-form-section-title">Batas Tombol Check-in</h5>
-                            <p class="ui-form-section-subtitle">Rentang waktu tombol check-in boleh digunakan guru.</p>
+                            <p class="ui-form-section-subtitle">Rentang waktu tombol check-in boleh digunakan guru. Check-in setelah batas toleransi akan tercatat terlambat.</p>
                         </div>
                     </div>
 
@@ -117,6 +120,7 @@
                                 value="{{ old('batas_check_in_mulai', $session ? substr($session->batas_check_in_mulai, 0, 5) : '') }}"
                                 required
                             >
+                            <small class="text-muted">Waktu paling awal tombol check-in dapat digunakan.</small>
                         </div>
 
                         <div class="col-md-6 ui-field">
@@ -128,6 +132,7 @@
                                 value="{{ old('batas_check_in_selesai', $session ? substr($session->batas_check_in_selesai, 0, 5) : '') }}"
                                 required
                             >
+                            <small class="text-muted">Waktu terakhir tombol check-in dapat digunakan. Check-in setelah batas tepat waktu tetap tercatat terlambat.</small>
                         </div>
                     </div>
                 </div>
@@ -151,6 +156,7 @@
                                 value="{{ old('batas_check_out_mulai', $session ? substr($session->batas_check_out_mulai, 0, 5) : '') }}"
                                 required
                             >
+                            <small class="text-muted">Waktu paling awal tombol check-out dapat digunakan.</small>
                         </div>
 
                         <div class="col-md-6 ui-field">
@@ -162,6 +168,7 @@
                                 value="{{ old('batas_check_out_selesai', $session ? substr($session->batas_check_out_selesai, 0, 5) : '') }}"
                                 required
                             >
+                            <small class="text-muted">Waktu terakhir tombol check-out dapat digunakan.</small>
                         </div>
                     </div>
                 </div>

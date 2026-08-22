@@ -15,11 +15,14 @@ class PayrollPeriod extends Model
         'tanggal_selesai',
         'status',
         'generated_by',
+        'finalized_by',
+        'finalized_at',
     ];
 
     protected $casts = [
         'tanggal_mulai' => 'date',
         'tanggal_selesai' => 'date',
+        'finalized_at' => 'datetime',
     ];
 
     public function items(): HasMany
@@ -30,6 +33,16 @@ class PayrollPeriod extends Model
     public function generator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'generated_by');
+    }
+
+    public function finalizer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'finalized_by');
+    }
+
+    public function audits(): HasMany
+    {
+        return $this->hasMany(PayrollAuditLog::class)->latest();
     }
 
     public function getNamaPeriodeAttribute(): string

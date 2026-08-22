@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedFaceDescriptor;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -11,10 +12,11 @@ class TeacherFaceEnrollment extends Model
 
     public const EMBEDDING_DIMENSIONS = 512;
 
-    public const MAX_RECAPTURES = 3;
+    public const MAX_CAPTURE_ATTEMPTS = 3;
 
     protected $fillable = [
         'teacher_id',
+        'liveness_challenge_id',
         'face_descriptor',
         'model_version',
         'recapture_count',
@@ -25,7 +27,7 @@ class TeacherFaceEnrollment extends Model
     protected function casts(): array
     {
         return [
-            'face_descriptor' => 'array',
+            'face_descriptor' => EncryptedFaceDescriptor::class,
             'recapture_count' => 'integer',
             'enrolled_at' => 'datetime',
         ];
@@ -38,19 +40,19 @@ class TeacherFaceEnrollment extends Model
             && count($this->face_descriptor) === self::EMBEDDING_DIMENSIONS;
     }
 
-    public function remainingRecaptures(): int
+    public function isLocked(): bool
     {
-        return max(0, self::MAX_RECAPTURES - $this->recapture_count);
-    }
-
-    public function canRecapture(): bool
-    {
-        return $this->remainingRecaptures() > 0;
+        return $this->exists;
     }
 
     public function teacher(): BelongsTo
     {
         return $this->belongsTo(Teacher::class);
+    }
+
+    public function livenessChallenge(): BelongsTo
+    {
+        return $this->belongsTo(BiometricLivenessChallenge::class, 'liveness_challenge_id');
     }
 
     public function enrolledBy(): BelongsTo

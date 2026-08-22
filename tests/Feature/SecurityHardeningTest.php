@@ -29,7 +29,6 @@ class SecurityHardeningTest extends TestCase
             'tanggal_selesai' => '2026-07-01',
             'alasan' => 'Alasan awal',
             'status_pengajuan' => 'disetujui',
-            'status_infal' => 'disetujui',
         ]);
 
         $response = $this
@@ -73,10 +72,16 @@ class SecurityHardeningTest extends TestCase
             ->get(route('attendance.photo.show', [$attendance, 'check-in']))
             ->assertForbidden();
 
-        $this
+        $response = $this
             ->actingAs($owner)
             ->get(route('attendance.photo.show', [$attendance, 'check-in']))
-            ->assertOk();
+            ->assertOk()
+            ->assertHeader('Cache-Control');
+
+        $cacheControl = (string) $response->headers->get('Cache-Control');
+        foreach (['private', 'no-store', 'max-age=0', 'must-revalidate'] as $directive) {
+            $this->assertStringContainsString($directive, $cacheControl);
+        }
     }
 
     public function test_notification_redirect_rejects_external_url(): void
@@ -93,8 +98,29 @@ class SecurityHardeningTest extends TestCase
 
         $this
             ->actingAs($user)
-            ->get(route('notifications.read', $notification))
+            ->post(route('notifications.read', $notification))
             ->assertRedirect(route('dashboard'));
+    }
+
+    public function test_notification_redirect_rejects_protocol_relative_url(): void
+    {
+        $user = $this->createUser('guru');
+        $notification = AppNotification::create([
+            'user_id' => $user->id,
+            'title' => 'Tes',
+            'message' => 'Tes redirect',
+            'type' => 'info',
+            'url' => '//evil.example/phishing',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('notifications.read', $notification))
+            ->assertRedirect(route('dashboard'));
+    }
+
+    public function test_legacy_public_teacher_api_is_not_available(): void
+    {
+        $this->getJson('/api/guru')->assertNotFound();
     }
 
     public function test_forgot_password_does_not_disclose_registered_email(): void
@@ -120,6 +146,25 @@ class SecurityHardeningTest extends TestCase
         $this->assertSame('Nama Aman', ExcelCell::escape('Nama Aman'));
     }
 
+    public function test_app_layout_uses_csp_safe_event_listeners(): void
+    {
+        $layout = (string) file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+        $this->assertStringNotContainsString('onclick=', $layout);
+        $this->assertStringContainsString(
+            "notificationToggleButton.addEventListener('click', toggleNotificationDropdown)",
+            $layout
+        );
+        $this->assertStringContainsString(
+            "profileToggleButton.addEventListener('click', toggleProfileDropdown)",
+            $layout
+        );
+        $this->assertStringContainsString(
+            "button.addEventListener('click', toggleSidebar)",
+            $layout
+        );
+    }
+
     private function createTeacherUser(string $role): array
     {
         $user = $this->createUser($role);
@@ -136,7 +181,7 @@ class SecurityHardeningTest extends TestCase
     private function createUser(string $role): User
     {
         $user = User::create([
-            'nip' => uniqid('nip_', true),
+            'username' => uniqid('user_', true),
             'name' => 'User Security Test '.uniqid(),
             'email' => uniqid('security_', true).'@example.test',
             'password' => Hash::make('password'),

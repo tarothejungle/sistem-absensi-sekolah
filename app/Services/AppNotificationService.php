@@ -2,11 +2,10 @@
 
 namespace App\Services;
 
+use App\Jobs\SendWebPushNotification;
 use App\Models\AppNotification;
 use App\Models\Attendance;
 use App\Models\User;
-use App\Models\WorkSchedule;
-use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 
@@ -14,22 +13,33 @@ class AppNotificationService
 {
     public static function send(int $userId, string $title, ?string $message = null, string $type = 'info', ?string $url = null): void
     {
-        if (!Schema::hasTable('app_notifications')) {
+        if (! Schema::hasTable('app_notifications')) {
             return;
         }
 
-        AppNotification::create([
+        $notification = AppNotification::create([
             'user_id' => $userId,
             'title' => $title,
             'message' => $message,
             'type' => $type,
             'url' => $url,
         ]);
+
+        if (config('pwa.push_enabled') && Schema::hasTable('push_subscriptions')) {
+            SendWebPushNotification::dispatch($userId, [
+                'title' => $notification->title,
+                'body' => $notification->message,
+                'type' => $notification->type,
+                'url' => self::pushUrl($notification->url),
+                'icon' => '/icons/icon-192.png',
+                'badge' => '/icons/icon-192.png',
+            ]);
+        }
     }
 
     public static function sendToRoles(array $roles, string $title, ?string $message = null, string $type = 'info', ?string $url = null): void
     {
-        if (!Schema::hasTable('app_notifications')) {
+        if (! Schema::hasTable('app_notifications')) {
             return;
         }
 
@@ -43,8 +53,8 @@ class AppNotificationService
 
     public static function forUser(User $user, int $limit = 8): Collection
     {
-        if (!Schema::hasTable('app_notifications')) {
-            return self::attendanceReminder($user);
+        if (! Schema::hasTable('app_notifications')) {
+            return self::attendanceReminderForUser($user);
         }
 
         $stored = AppNotification::where('user_id', $user->id)
@@ -64,7 +74,7 @@ class AppNotificationService
                 ];
             });
 
-        return self::attendanceReminder($user)
+        return self::attendanceReminderForUser($user)
             ->merge($stored)
             ->take($limit)
             ->values();
@@ -72,119 +82,111 @@ class AppNotificationService
 
     public static function unreadCount(User $user): int
     {
-        if (!Schema::hasTable('app_notifications')) {
-            return self::attendanceReminder($user)->count();
+        if (! Schema::hasTable('app_notifications')) {
+            return self::attendanceReminderForUser($user)->count();
         }
 
         return AppNotification::where('user_id', $user->id)
             ->whereNull('read_at')
-            ->count() + self::attendanceReminder($user)->count();
+            ->count() + self::attendanceReminderForUser($user)->count();
     }
 
-    private static function attendanceReminder(User $user): Collection
+    public static function attendanceReminderForUser(User $user): Collection
     {
-        if (!in_array($user->role, ['guru', 'bendahara', 'kepala_sekolah', 'tenaga_kependidikan'], true)) {
+        if (! $user->hasAttendanceAccess()) {
             return collect();
         }
 
         $teacher = $user->teacher;
 
-        if (!$teacher) {
+        if (! $teacher) {
             return collect();
         }
 
-        $today = now('Asia/Jakarta')->toDateString();
-        $nowTime = now('Asia/Jakarta')->format('H:i:s');
-        $hariIni = self::todayHari();
+        $now = now(config('app.timezone'));
+        $resolver = app(WorkScheduleResolver::class);
+        $windowService = app(AttendanceWindowService::class);
+        $dates = [$now->copy()->startOfDay(), $now->copy()->startOfDay()->subDay(), $now->copy()->startOfDay()->addDay()];
 
-        $hasAnySchedule = WorkSchedule::where('teacher_id', $teacher->id)->exists();
-        $todaySchedule = WorkSchedule::where('teacher_id', $teacher->id)
-            ->where('hari', $hariIni)
-            ->where('status', 'aktif')
-            ->first();
+        foreach ($dates as $date) {
+            foreach ($resolver->sessionsForDate($teacher, $date) as $session) {
+                $attendance = Attendance::where('teacher_id', $teacher->id)
+                    ->where('attendance_session_id', $session->id)
+                    ->whereDate('tanggal', $date->toDateString())
+                    ->first();
 
-        if ($hasAnySchedule && !$todaySchedule) {
-            return collect();
-        }
+                $canCheckIn = $windowService->isCheckInOpen($session, $now, $date)
+                    && (! $attendance || ! $attendance->check_in_time);
 
-        $sessions = $teacher->attendanceSessions()
-            ->where('attendance_sessions.status', 'aktif')
-            ->orderBy('attendance_sessions.jam_masuk')
-            ->get();
+                if ($canCheckIn) {
+                    return collect([
+                        (object) [
+                            'id' => null,
+                            'session_id' => $session->id,
+                            'reminder_date' => $date->toDateString(),
+                            'reminder_type' => 'check_in',
+                            'title' => 'Waktunya Check-in',
+                            'message' => 'Silakan melakukan check-in untuk '.$session->nama_sesi.'.',
+                            'type' => 'attendance',
+                            'url' => route('attendance.index', [], false),
+                            'read_at' => null,
+                            'created_at' => now(),
+                            'is_dynamic' => true,
+                        ],
+                    ]);
+                }
 
-        foreach ($sessions as $session) {
-            $attendance = Attendance::where('teacher_id', $teacher->id)
-                ->where('attendance_session_id', $session->id)
-                ->whereDate('tanggal', $today)
-                ->first();
+                $canCheckOut = $attendance
+                    && $attendance->check_in_time
+                    && ! $attendance->check_out_time
+                    && $windowService->isCheckOutOpen($session, $now, $date);
 
-            $canCheckIn = self::isTimeInRange($nowTime, $session->batas_check_in_mulai, $session->batas_check_in_selesai)
-                && (!$attendance || !$attendance->check_in_time);
-
-            if ($canCheckIn) {
-                return collect([
-                    (object) [
-                        'id' => null,
-                        'title' => 'Waktunya Check-in',
-                        'message' => 'Silakan melakukan check-in untuk ' . $session->nama_sesi . '.',
-                        'type' => 'attendance',
-                        'url' => route('attendance.index'),
-                        'read_at' => null,
-                        'created_at' => now(),
-                        'is_dynamic' => true,
-                    ],
-                ]);
-            }
-
-            $canCheckOut = $attendance
-                && $attendance->check_in_time
-                && !$attendance->check_out_time
-                && self::isTimeInRange($nowTime, $session->batas_check_out_mulai, $session->batas_check_out_selesai);
-
-            if ($canCheckOut) {
-                return collect([
-                    (object) [
-                        'id' => null,
-                        'title' => 'Waktunya Check-out',
-                        'message' => 'Silakan melakukan check-out untuk ' . $session->nama_sesi . '.',
-                        'type' => 'attendance',
-                        'url' => route('attendance.index'),
-                        'read_at' => null,
-                        'created_at' => now(),
-                        'is_dynamic' => true,
-                    ],
-                ]);
+                if ($canCheckOut) {
+                    return collect([
+                        (object) [
+                            'id' => null,
+                            'session_id' => $session->id,
+                            'reminder_date' => $date->toDateString(),
+                            'reminder_type' => 'check_out',
+                            'title' => 'Waktunya Check-out',
+                            'message' => 'Silakan melakukan check-out untuk '.$session->nama_sesi.'.',
+                            'type' => 'attendance',
+                            'url' => route('attendance.index', [], false),
+                            'read_at' => null,
+                            'created_at' => now(),
+                            'is_dynamic' => true,
+                        ],
+                    ]);
+                }
             }
         }
 
         return collect();
     }
 
-    private static function isTimeInRange(string $current, string $start, string $end): bool
+    private static function pushUrl(?string $url): string
     {
-        $current = Carbon::parse($current);
-        $start = Carbon::parse($start);
-        $end = Carbon::parse($end);
-
-        if ($start->lte($end)) {
-            return $current->betweenIncluded($start, $end);
+        if (! $url) {
+            return route('dashboard', [], false);
         }
 
-        return $current->gte($start) || $current->lte($end);
+        if (str_starts_with($url, '/')) {
+            return $url;
+        }
+
+        $parts = parse_url($url);
+        $targetHost = $parts['host'] ?? null;
+        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        if ($parts === false || ($targetHost && $appHost && strcasecmp($targetHost, $appHost) !== 0)) {
+            return route('dashboard', [], false);
+        }
+
+        $relative = $parts['path'] ?? route('dashboard', [], false);
+        if (isset($parts['query'])) {
+            $relative .= '?'.$parts['query'];
+        }
+
+        return $relative;
     }
 
-    private static function todayHari(): string
-    {
-        $dayMap = [
-            'monday' => 'senin',
-            'tuesday' => 'selasa',
-            'wednesday' => 'rabu',
-            'thursday' => 'kamis',
-            'friday' => 'jumat',
-            'saturday' => 'sabtu',
-            'sunday' => 'minggu',
-        ];
-
-        return $dayMap[strtolower(now('Asia/Jakarta')->englishDayOfWeek)] ?? 'senin';
-    }
 }
